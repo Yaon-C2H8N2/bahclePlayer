@@ -44,7 +44,7 @@ export const Home = () => {
             <Button
                 className={"bg-[#6441a5] hover:bg-[#6441a5] hover:brightness-75"}
                 onClick={() => {
-                    window.location.href = "https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=l2k40vx947g43a13nigtnpuhl4oxrs&redirect_uri=http://localhost:5173&scope=channel:moderate+whispers:edit+channel:read:redemptions+channel:manage:redemptions+channel:manage:polls+channel:read:polls+channel:bot\n"
+                    window.location.href = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${import.meta.env.VITE_TWITCH_CLIENT_ID}&redirect_uri=${import.meta.env.VITE_APP_URL}&scope=channel:moderate+whispers:edit+channel:read:redemptions+channel:manage:redemptions+channel:manage:polls+channel:read:polls+channel:bot`
                 }}
             >
                 {loading ? <LoaderCircle className={"animate-spin"}/> : <><Twitch/>Sign in with Twitch</>}

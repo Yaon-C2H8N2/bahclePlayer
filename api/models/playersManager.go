@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"math/rand"
 	"net/http"
@@ -72,18 +73,22 @@ func (pm *PlayersManager) mainLoop(token string) {
 }
 
 type testMessage struct {
-	Message string `json:"message"`
+	MessageId string `json:"message_id"`
+	Message   string `json:"message"`
 }
 
 func (pm *PlayersManager) testNotify() {
 	for {
-		for _, conn := range pm.clients {
-			err := conn.WriteJSON(testMessage{Message: "Hello"})
+		for key, conn := range pm.clients {
+			err := conn.WriteJSON(testMessage{MessageId: uuid.NewString(), Message: "Hello"})
+			fmt.Printf("Sent message to client %s\n", key)
 			if err != nil {
 				conn.Close()
+				pm.mutex.Lock()
+				delete(pm.clients, key)
+				pm.mutex.Unlock()
 			}
 		}
-		fmt.Printf("Sent message to %d clients\n", len(pm.clients))
 		time.Sleep(time.Duration(rand.Intn(5-1)+1) * time.Second)
 	}
 }
