@@ -1,9 +1,10 @@
-import {useEffect, useRef} from "react";
+import {useEffect, useRef, useState} from "react";
 import {Button} from "@/components/ui/button.tsx";
 
 
 export const Player = () => {
     const socketLoaded = useRef(false)
+    const [messages, setMessages] = useState<any>([])
 
     useEffect(() => {
         if (!document.cookie.includes("token")){
@@ -21,7 +22,7 @@ export const Player = () => {
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data)
                     console.log(data)
-                    //todo: handle data
+                    setMessages((prev: any) => [...prev, data])
                 }
 
                 return ws;
@@ -38,6 +39,13 @@ export const Player = () => {
                 }}>Log out</Button>
             </div>
             <div className={"flex flex-col flex-1 w-full justify-center items-center"}>
+                {messages.map((message: any, index: number) => {
+                    return (
+                        <div key={index}>
+                            {message.message_id + " " + message.message}
+                        </div>
+                    )
+                })}
             </div>
         </div>
     )

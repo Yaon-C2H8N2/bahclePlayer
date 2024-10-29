@@ -2,13 +2,29 @@ package twitch
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/websocket"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"strings"
 )
 
 type EventSub struct {
-	onEvent   func(event any)
-	sessionId string
+	onEvent       func(event any)
+	onStarted     func()
+	sessionId     string
+	token         string
+	broadcasterId string
+}
+
+func GetEventSub(token string) *EventSub {
+	var newEventSub = &EventSub{
+		token: token,
+	}
+	newEventSub.setBroadcasterIdFromToken()
+	return newEventSub
 }
 
 func (es *EventSub) Start() {
@@ -19,31 +35,84 @@ func (es *EventSub) OnEvent(callback func(event any)) {
 	es.onEvent = callback
 }
 
-//func SubscribeToMessageEvents() {
-//	twitchUrl, _ := url.Parse("https://api.twitch.tv/helix/eventsub/subscriptions")
-//
-//	/*
-//		curl -X POST 'https://api.twitch.tv/helix/eventsub/subscriptions' \
-//		-H 'Authorization: Bearer 2gbdx6oar67tqtcmt49t3wpcgycthx' \
-//		-H 'Client-Id: wbmytr93xzw8zbg0p1izqyzzc5mbiz' \
-//		-H 'Content-Type: application/json' \
-//		-d '{"
-//		    type": "user.update",
-//		    "version": "1",
-//		    "condition": {
-//		        "user_id": "1234"
-//		    },
-//		    "transport": {
-//		        "method": "websocket",
-//		        "session_id": "AQoQexAWVYKSTIu4ec_2VAxyuhAB"
-//		    }
-//		}'
-//	*/
-//
-//	if err != nil {
-//		panic(err)
-//	}
-//}
+func (es *EventSub) OnStarted(callback func()) {
+	es.onStarted = callback
+}
+
+func (es *EventSub) SubscribeToMessageEvents() {
+	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+
+	var data = subscriptionRequest{
+		Type:    "channel.chat.message",
+		Version: "1",
+		Condition: condition{
+			BroadcasterUserId: es.broadcasterId,
+			UserId:            es.broadcasterId,
+		},
+		Transport: transport{
+			Method:    "websocket",
+			SessionId: es.sessionId,
+		},
+	}
+
+	httpClient := &http.Client{}
+	bytes, _ := json.Marshal(data)
+	fmt.Println("Request body:", string(bytes))
+	req, err := http.NewRequest("POST", twitchUrl, strings.NewReader(string(bytes)))
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+es.token)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return
+	}
+
+	fmt.Println("Response body:", string(body))
+}
+
+func (es *EventSub) setBroadcasterIdFromToken() {
+	twitchUrl := "https://api.twitch.tv/helix/users"
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("GET", twitchUrl, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+es.token)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return
+	}
+	var userInfoResponse = &userInfoResponse{}
+	err = json.Unmarshal(body, userInfoResponse)
+	if err != nil {
+		fmt.Println("Error unmarshalling response:", err)
+		return
+	}
+	es.broadcasterId = userInfoResponse.Data[0].ID
+}
 
 func (es *EventSub) listenToMessages() {
 	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
@@ -52,9 +121,9 @@ func (es *EventSub) listenToMessages() {
 	if err != nil {
 		panic(err)
 	}
-	defer conn.Close()
 
 	go func() {
+		defer conn.Close()
 		for {
 			_, messageBytes, err := conn.ReadMessage()
 			if err != nil {
@@ -70,17 +139,17 @@ func (es *EventSub) listenToMessages() {
 			}
 
 			switch message.Metadata.MessageType {
-			case "welcome":
+			case "session_welcome":
 				var welcomeMessage = &WelcomeMessage{}
 				err = json.Unmarshal(messageBytes, welcomeMessage)
 				if err != nil {
 					log.Printf("err: %s", messageBytes)
 					panic(err)
 				}
-				log.Printf("Welcome message: %s", welcomeMessage.Payload.Session.Id)
 
 				es.sessionId = welcomeMessage.Payload.Session.Id
-
+				es.onStarted()
+				break
 			case "notification":
 				var notificationMessage = &NotificationMessage{}
 				err = json.Unmarshal(messageBytes, notificationMessage)
@@ -88,7 +157,8 @@ func (es *EventSub) listenToMessages() {
 					log.Printf("err: %s", messageBytes)
 					panic(err)
 				}
-				es.onEvent(notificationMessage.Payload.Event)
+				es.onEvent(notificationMessage)
+				break
 			}
 		}
 	}()
