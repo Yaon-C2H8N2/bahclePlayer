@@ -27,8 +27,15 @@ type NotificationMessage struct {
 	BaseMessage
 	Payload struct {
 		Subscription struct {
+			Id        string `json:"id"`
+			Status    string `json:"status"`
+			Type      string `json:"type"`
+			Version   string `json:"version"`
+			Cost      int    `json:"cost"`
+			CreatedAt string `json:"created_at"`
+			Condition any    `json:"condition"`
+			Transport any    `json:"transport"`
 		} `json:"subscription"`
-		Event struct {
-		} `json:"event"`
+		Event any `json:"event"`
 	} `json:"payload"`
 }

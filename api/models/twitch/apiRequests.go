@@ -16,3 +16,9 @@ type subscriptionRequest struct {
 	Condition condition `json:"condition"`
 	Transport transport `json:"transport"`
 }
+
+type appTokenRequest struct {
+	ClientId     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	GrantType    string `json:"grant_type"`
+}

@@ -16,11 +16,11 @@ type userInfoResponse struct {
 
 type subcriptionResponse struct {
 	Data []struct {
-		ID        string   `json:"id"`
-		Status    string   `json:"status"`
-		Type      string   `json:"type"`
-		Version   string   `json:"version"`
-		Condition struct{} `json:"condition"`
+		ID        string `json:"id"`
+		Status    string `json:"status"`
+		Type      string `json:"type"`
+		Version   string `json:"version"`
+		Condition any    `json:"condition"`
 		Transport struct {
 			Method     string `json:"method"`
 			Callback   string `json:"callback"`
@@ -32,4 +32,10 @@ type subcriptionResponse struct {
 	Total        int `json:"total"`
 	TotalCost    int `json:"total_cost"`
 	MaxTotalCost int `json:"max_total_cost"`
+}
+
+type tokenResponse struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+	TokenType   string `json:"token_type"`
 }

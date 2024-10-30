@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
 	"github.com/gin-gonic/gin"
@@ -60,9 +61,11 @@ func (pm *PlayersManager) mainLoop(token string) {
 		Message   string `json:"message"`
 	}
 
-	eventSub := twitch.GetEventSub(token)
+	eventSub := twitch.GetEventSub()
 	eventSub.OnEvent(func(event any) {
-		err := conn.WriteJSON(testMessage{MessageId: uuid.NewString(), Message: event.(string)})
+		eventString, _ := json.Marshal(event)
+
+		err := conn.WriteJSON(testMessage{MessageId: uuid.NewString(), Message: string(eventString)})
 		fmt.Printf("Sent message to client %s\n", token)
 		if err != nil {
 			conn.Close()
@@ -72,7 +75,7 @@ func (pm *PlayersManager) mainLoop(token string) {
 		}
 	})
 	eventSub.OnStarted(func() {
-		eventSub.SubscribeToMessageEvents()
+		eventSub.SubscribeToMessageEvents(token)
 	})
 	eventSub.Start()
 

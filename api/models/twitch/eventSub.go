@@ -12,18 +12,15 @@ import (
 )
 
 type EventSub struct {
-	onEvent       func(event any)
-	onStarted     func()
-	sessionId     string
-	token         string
-	broadcasterId string
+	onEvent   func(event any)
+	onStarted func()
+	sessionId string
+	appToken  string
 }
 
-func GetEventSub(token string) *EventSub {
-	var newEventSub = &EventSub{
-		token: token,
-	}
-	newEventSub.setBroadcasterIdFromToken()
+func GetEventSub() *EventSub {
+	var newEventSub = &EventSub{}
+	newEventSub.setAppToken()
 	return newEventSub
 }
 
@@ -39,15 +36,19 @@ func (es *EventSub) OnStarted(callback func()) {
 	es.onStarted = callback
 }
 
-func (es *EventSub) SubscribeToMessageEvents() {
+func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+	broadcasterId, err := es.getBroadcasterIdFromToken(userToken)
+	if err != nil {
+		panic(err)
+	}
 
 	var data = subscriptionRequest{
 		Type:    "channel.chat.message",
 		Version: "1",
 		Condition: condition{
-			BroadcasterUserId: es.broadcasterId,
-			UserId:            es.broadcasterId,
+			BroadcasterUserId: broadcasterId,
+			UserId:            broadcasterId,
 		},
 		Transport: transport{
 			Method:    "websocket",
@@ -63,7 +64,7 @@ func (es *EventSub) SubscribeToMessageEvents() {
 		panic(err)
 	}
 
-	req.Header.Add("Authorization", "Bearer "+es.token)
+	req.Header.Add("Authorization", "Bearer "+userToken)
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
 	req.Header.Add("Content-Type", "application/json")
 
@@ -79,20 +80,32 @@ func (es *EventSub) SubscribeToMessageEvents() {
 		return
 	}
 
-	fmt.Println("Response body:", string(body))
+	subcriptionResponse := &subcriptionResponse{}
+	err = json.Unmarshal(body, subcriptionResponse)
+	if err != nil {
+		fmt.Println("Error unmarshalling response:", err)
+		return
+	}
+	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
 }
 
-func (es *EventSub) setBroadcasterIdFromToken() {
-	twitchUrl := "https://api.twitch.tv/helix/users"
+func (es *EventSub) setAppToken() {
+	twitchUrl := "https://id.twitch.tv/oauth2/token"
+
+	request := &appTokenRequest{
+		ClientId:     os.Getenv("TWITCH_CLIENT_ID"),
+		ClientSecret: os.Getenv("TWITCH_CLIENT_SECRET"),
+		GrantType:    "client_credentials",
+	}
+	twitchUrl += "?client_id=" + request.ClientId + "&client_secret=" + request.ClientSecret + "&grant_type=" + request.GrantType
 
 	httpClient := &http.Client{}
-	req, err := http.NewRequest("GET", twitchUrl, nil)
+	req, err := http.NewRequest("POST", twitchUrl, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	req.Header.Add("Authorization", "Bearer "+es.token)
-	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	res, err := httpClient.Do(req)
 	if err != nil {
@@ -105,13 +118,46 @@ func (es *EventSub) setBroadcasterIdFromToken() {
 		fmt.Println("Error reading response:", err)
 		return
 	}
-	var userInfoResponse = &userInfoResponse{}
-	err = json.Unmarshal(body, userInfoResponse)
+
+	var tokenResponse = &tokenResponse{}
+	err = json.Unmarshal(body, tokenResponse)
 	if err != nil {
 		fmt.Println("Error unmarshalling response:", err)
 		return
 	}
-	es.broadcasterId = userInfoResponse.Data[0].ID
+
+	es.appToken = tokenResponse.AccessToken
+}
+
+func (es *EventSub) getBroadcasterIdFromToken(userToken string) (string, error) {
+	twitchUrl := "https://api.twitch.tv/helix/users"
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("GET", twitchUrl, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var userInfoResponse = &userInfoResponse{}
+	err = json.Unmarshal(body, userInfoResponse)
+	if err != nil {
+		return "", err
+	}
+
+	return userInfoResponse.Data[0].ID, nil
 }
 
 func (es *EventSub) listenToMessages() {
@@ -162,4 +208,5 @@ func (es *EventSub) listenToMessages() {
 			}
 		}
 	}()
+	fmt.Println("Listening to messages")
 }
