@@ -15,6 +15,7 @@ type PlayersManager struct {
 	mutex    *sync.Mutex
 	clients  map[string]*websocket.Conn
 	upgrader websocket.Upgrader
+	eventSub *twitch.EventSub
 }
 
 func DefaultPlayersManager() *PlayersManager {
@@ -26,6 +27,7 @@ func DefaultPlayersManager() *PlayersManager {
 				return true
 			},
 		},
+		eventSub: twitch.GetEventSub(),
 	}
 }
 
@@ -61,8 +63,7 @@ func (pm *PlayersManager) mainLoop(token string) {
 		Message   string `json:"message"`
 	}
 
-	eventSub := twitch.GetEventSub()
-	eventSub.OnEvent(func(event any) {
+	pm.eventSub.OnEvent(token, func(event any) {
 		eventString, _ := json.Marshal(event)
 
 		err := conn.WriteJSON(testMessage{MessageId: uuid.NewString(), Message: string(eventString)})
@@ -74,10 +75,14 @@ func (pm *PlayersManager) mainLoop(token string) {
 			pm.mutex.Unlock()
 		}
 	})
-	eventSub.OnStarted(func() {
-		eventSub.SubscribeToMessageEvents(token)
-	})
-	eventSub.Start()
+	if pm.eventSub.IsStarted() {
+		pm.eventSub.SubscribeToMessageEvents(token)
+	} else {
+		pm.eventSub.OnStarted(func() {
+			pm.eventSub.SubscribeToMessageEvents(token)
+		})
+		pm.eventSub.Start()
+	}
 
 	for {
 		_, _, err := conn.ReadMessage()
@@ -88,6 +93,8 @@ func (pm *PlayersManager) mainLoop(token string) {
 			pm.mutex.Lock()
 			delete(pm.clients, token)
 			pm.mutex.Unlock()
+
+			pm.eventSub.DropAllSubscriptions(token)
 
 			break
 		}

@@ -12,14 +12,16 @@ import (
 )
 
 type EventSub struct {
-	onEvent   func(event any)
+	onEvent   map[string]func(event any)
 	onStarted func()
 	sessionId string
 	appToken  string
 }
 
 func GetEventSub() *EventSub {
-	var newEventSub = &EventSub{}
+	var newEventSub = &EventSub{
+		onEvent: make(map[string]func(event any)),
+	}
 	newEventSub.setAppToken()
 	return newEventSub
 }
@@ -28,12 +30,22 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
-func (es *EventSub) OnEvent(callback func(event any)) {
-	es.onEvent = callback
+func (es *EventSub) OnEvent(token string, callback func(event any)) {
+	userId, _ := es.getBroadcasterIdFromToken(token)
+
+	es.onEvent[userId] = callback
 }
 
 func (es *EventSub) OnStarted(callback func()) {
 	es.onStarted = callback
+}
+
+func (es *EventSub) IsStarted() bool {
+	return es.sessionId != ""
+}
+
+func (es *EventSub) DropAllSubscriptions(userToken string) {
+
 }
 
 func (es *EventSub) SubscribeToMessageEvents(userToken string) {
@@ -194,7 +206,7 @@ func (es *EventSub) listenToMessages() {
 				}
 
 				es.sessionId = welcomeMessage.Payload.Session.Id
-				es.onStarted()
+				go es.onStarted()
 				break
 			case "notification":
 				var notificationMessage = &NotificationMessage{}
@@ -203,7 +215,7 @@ func (es *EventSub) listenToMessages() {
 					log.Printf("err: %s", messageBytes)
 					panic(err)
 				}
-				es.onEvent(notificationMessage)
+				go es.onEvent[notificationMessage.Payload.Subscription.Condition.BroadcasterUserId](notificationMessage)
 				break
 			}
 		}

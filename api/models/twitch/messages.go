@@ -33,8 +33,11 @@ type NotificationMessage struct {
 			Version   string `json:"version"`
 			Cost      int    `json:"cost"`
 			CreatedAt string `json:"created_at"`
-			Condition any    `json:"condition"`
-			Transport any    `json:"transport"`
+			Condition struct {
+				BroadcasterUserId string `json:"broadcaster_user_id"`
+				UserId            string `json:"user_id"`
+			} `json:"condition"`
+			Transport any `json:"transport"`
 		} `json:"subscription"`
 		Event any `json:"event"`
 	} `json:"payload"`

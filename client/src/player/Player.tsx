@@ -20,8 +20,7 @@ export const Player = () => {
                 const ws = new WebSocket(`ws://localhost:8081/player?access_token=${token}`);
 
                 ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data)
-                    console.log(data)
+                    const data = JSON.parse(JSON.parse(event.data).message)
                     setMessages((prev: any) => [...prev, data])
                 }
 
@@ -42,7 +41,7 @@ export const Player = () => {
                 {messages.map((message: any, index: number) => {
                     return (
                         <div key={index}>
-                            {message.message_id + " " + message.message}
+                            {message.payload.event.message.text}
                         </div>
                     )
                 })}
