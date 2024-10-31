@@ -12,17 +12,18 @@ import (
 )
 
 type EventSub struct {
-	onEvent   map[string]func(event any)
-	onStarted func()
-	sessionId string
-	appToken  string
+	onEvent    map[string]func(event NotificationMessage)
+	onStarted  func()
+	sessionId  string
+	apiWrapper *ApiWrapper
 }
 
-func GetEventSub() *EventSub {
+func GetEventSub(apiWrapper *ApiWrapper) *EventSub {
 	var newEventSub = &EventSub{
-		onEvent: make(map[string]func(event any)),
+		onEvent: make(map[string]func(event NotificationMessage)),
 	}
-	newEventSub.setAppToken()
+
+	newEventSub.apiWrapper = apiWrapper
 	return newEventSub
 }
 
@@ -30,8 +31,8 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
-func (es *EventSub) OnEvent(token string, callback func(event any)) {
-	userId, _ := es.getBroadcasterIdFromToken(token)
+func (es *EventSub) OnEvent(token string, callback func(event NotificationMessage)) {
+	userId, _ := es.apiWrapper.GetBroadcasterIdFromToken(token)
 
 	es.onEvent[userId] = callback
 }
@@ -45,12 +46,12 @@ func (es *EventSub) IsStarted() bool {
 }
 
 func (es *EventSub) DropAllSubscriptions(userToken string) {
-
+	//TODO: Implement
 }
 
 func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
-	broadcasterId, err := es.getBroadcasterIdFromToken(userToken)
+	broadcasterId, err := es.apiWrapper.GetBroadcasterIdFromToken(userToken)
 	if err != nil {
 		panic(err)
 	}
@@ -101,77 +102,6 @@ func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
 }
 
-func (es *EventSub) setAppToken() {
-	twitchUrl := "https://id.twitch.tv/oauth2/token"
-
-	request := &appTokenRequest{
-		ClientId:     os.Getenv("TWITCH_CLIENT_ID"),
-		ClientSecret: os.Getenv("TWITCH_CLIENT_SECRET"),
-		GrantType:    "client_credentials",
-	}
-	twitchUrl += "?client_id=" + request.ClientId + "&client_secret=" + request.ClientSecret + "&grant_type=" + request.GrantType
-
-	httpClient := &http.Client{}
-	req, err := http.NewRequest("POST", twitchUrl, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	res, err := httpClient.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return
-	}
-
-	var tokenResponse = &tokenResponse{}
-	err = json.Unmarshal(body, tokenResponse)
-	if err != nil {
-		fmt.Println("Error unmarshalling response:", err)
-		return
-	}
-
-	es.appToken = tokenResponse.AccessToken
-}
-
-func (es *EventSub) getBroadcasterIdFromToken(userToken string) (string, error) {
-	twitchUrl := "https://api.twitch.tv/helix/users"
-
-	httpClient := &http.Client{}
-	req, err := http.NewRequest("GET", twitchUrl, nil)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+userToken)
-	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
-
-	res, err := httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-	var userInfoResponse = &userInfoResponse{}
-	err = json.Unmarshal(body, userInfoResponse)
-	if err != nil {
-		return "", err
-	}
-
-	return userInfoResponse.Data[0].ID, nil
-}
-
 func (es *EventSub) listenToMessages() {
 	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
 	conn, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
@@ -215,7 +145,7 @@ func (es *EventSub) listenToMessages() {
 					log.Printf("err: %s", messageBytes)
 					panic(err)
 				}
-				go es.onEvent[notificationMessage.Payload.Subscription.Condition.BroadcasterUserId](notificationMessage)
+				go es.onEvent[notificationMessage.Payload.Subscription.Condition.BroadcasterUserId](*notificationMessage)
 				break
 			}
 		}

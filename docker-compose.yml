@@ -18,3 +18,10 @@ services:
       - api
     env_file:
       - .env
+
+  database:
+    image: postgres:${POSTGRES_VERSION}
+    ports:
+      - "5432:${POSTGRES_PORT}"
+    env_file:
+      - .env

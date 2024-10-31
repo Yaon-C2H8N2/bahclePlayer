@@ -22,3 +22,14 @@ type appTokenRequest struct {
 	ClientSecret string `json:"client_secret"`
 	GrantType    string `json:"grant_type"`
 }
+
+type pollCreateRequest struct {
+	BroadcasterId string `json:"broadcaster_id"`
+	Title         string `json:"title"`
+	Choices       []struct {
+		Title string `json:"title"`
+	} `json:"choices"`
+	ChannelPointsVotingEnabled bool `json:"channel_points_voting_enabled"`
+	ChannelPointsPerVote       int  `json:"channel_points_per_vote"`
+	Duration                   int  `json:"duration"`
+}

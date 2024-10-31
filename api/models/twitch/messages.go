@@ -42,3 +42,48 @@ type NotificationMessage struct {
 		Event any `json:"event"`
 	} `json:"payload"`
 }
+
+type ChannelPointsCustomRewardRedemptionAddEvent struct {
+	Id                   string `json:"id"`
+	BroadcasterUserId    string `json:"broadcaster_user_id"`
+	BroadcasterUserLogin string `json:"broadcaster_user_login"`
+	BroadcasterUserName  string `json:"broadcaster_user_name"`
+	UserId               string `json:"user_id"`
+	UserLogin            string `json:"user_login"`
+	UserName             string `json:"user_name"`
+	UserInput            string `json:"user_input"`
+	Status               string `json:"status"`
+	Reward               struct {
+		Id     string `json:"id"`
+		Title  string `json:"title"`
+		Cost   int    `json:"cost"`
+		Prompt string `json:"prompt"`
+	} `json:"reward"`
+	RedeemedAt time.Time `json:"redeemed_at"`
+}
+
+type ChannelPollEndEvent struct {
+	Id                   string `json:"id"`
+	BroadcasterUserId    string `json:"broadcaster_user_id"`
+	BroadcasterUserLogin string `json:"broadcaster_user_login"`
+	BroadcasterUserName  string `json:"broadcaster_user_name"`
+	Title                string `json:"title"`
+	Choices              []struct {
+		Id                 string `json:"id"`
+		Title              string `json:"title"`
+		BitsVotes          int    `json:"bits_votes"`
+		ChannelPointsVotes int    `json:"channel_points_votes"`
+		Votes              int    `json:"votes"`
+	} `json:"choices"`
+	BitsVoting struct {
+		IsEnabled     bool `json:"is_enabled"`
+		AmountPerVote int  `json:"amount_per_vote"`
+	} `json:"bits_voting"`
+	ChannelPointsVoting struct {
+		IsEnabled     bool `json:"is_enabled"`
+		AmountPerVote int  `json:"amount_per_vote"`
+	} `json:"channel_points_voting"`
+	Status    string    `json:"status"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
+}
