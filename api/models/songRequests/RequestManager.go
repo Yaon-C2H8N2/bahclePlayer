@@ -15,7 +15,11 @@ func (rm *RequestManager) AddRequest(request SongRequest) {
 }
 
 func (rm *RequestManager) GetRequest(pollId string) SongRequest {
-	return rm.requests[pollId]
+	var request, ok = rm.requests[pollId]
+	if ok {
+		return request
+	}
+	return SongRequest{}
 }
 
 func (rm *RequestManager) RemoveRequest(pollId string) {

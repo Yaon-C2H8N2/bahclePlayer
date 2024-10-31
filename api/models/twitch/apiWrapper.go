@@ -153,3 +153,26 @@ func (aw *ApiWrapper) CreatePoll(userToken string, broadcasterId string, title s
 
 	return pollResponse.Data[0].Id, nil
 }
+
+func (aw *ApiWrapper) UpdateRedemptionStatus(userToken string, redemptionId string, broadcasterId string, rewardId string, newStatus string) error {
+	twitchUrl := fmt.Sprintf("https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions?id=%s&broadcaster_id=%s&reward_id=%s", redemptionId, broadcasterId, rewardId)
+
+	body := strings.NewReader(`{"status":"` + newStatus + `"}`)
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("PATCH", twitchUrl, body)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", aw.clientId)
+	req.Header.Add("Content-Type", "application/json")
+
+	_, err = httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -89,7 +89,7 @@ func (pm *PlayersManager) mainLoop(token string) {
 			youtubeId := youtubeIdRegexp.FindString(message)
 			if youtubeId == "" {
 				fmt.Println("Failed to extract youtube id from message")
-				//TODO: request twitch to cancel redemption
+				err = pm.apiWrapper.UpdateRedemptionStatus(token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
 				break
 			}
 
@@ -104,16 +104,41 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 			pollTitle := fmt.Sprintf("Should we play %s by %s?", songRequest.Title, songRequest.Channel)
 			twitchPollId, err := pm.apiWrapper.CreatePoll(token, redemptionEvent.BroadcasterUserId, pollTitle, []string{"Yes", "No"}, 60)
-			songRequest.TwitchPollID = twitchPollId //TODO: get poll id
+			songRequest.TwitchPollID = twitchPollId
 			requestManager.AddRequest(songRequest)
 			break
 		case "channel.poll.end":
-			//TODO: get poll id
-			//TODO: if poll id is in request manager, get and remove song request
-			//TODO: check if poll result is valid
-			//TODO: send song request to player if valid
-			//TODO: set redemption as completed if valid
-			//TODO: set redemption as canceled if invalid
+			var pollEndEvent = &twitch.ChannelPollEndEvent{}
+			err := json.Unmarshal(eventBytes, pollEndEvent)
+			if err != nil {
+				fmt.Println("Failed to unmarshal poll end event")
+				break
+			}
+
+			songRequest := requestManager.GetRequest(pollEndEvent.Id)
+			if songRequest.TwitchPollID == "" {
+				fmt.Println("Failed to get song request from poll id")
+				break
+			}
+
+			maxVotes := 0
+			maxChoice := ""
+			newStatus := "CANCELED"
+			for _, choice := range pollEndEvent.Choices {
+				if choice.BitsVotes+choice.ChannelPointsVotes > maxVotes {
+					maxVotes = choice.BitsVotes + choice.ChannelPointsVotes
+					maxChoice = choice.Title
+				}
+			}
+			if maxChoice == "Yes" {
+				//TODO: send song request to player if valid
+				newStatus = "FULFILLED"
+			}
+			err = pm.apiWrapper.UpdateRedemptionStatus(token, songRequest.TwitchRedemptionID, pollEndEvent.BroadcasterUserId, songRequest.TwitchRewardID, newStatus)
+			if err != nil {
+				fmt.Println("Failed to update redemption status")
+				break
+			}
 		}
 	})
 
