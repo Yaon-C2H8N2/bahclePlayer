@@ -2,7 +2,7 @@ package twitch
 
 import "time"
 
-type userInfoResponse struct {
+type UserInfoResponse struct {
 	Data []struct {
 		ID              string `json:"id"`
 		Login           string `json:"login"`
@@ -16,7 +16,7 @@ type userInfoResponse struct {
 	} `json:"data"`
 }
 
-type subcriptionResponse struct {
+type SubscriptionResponse struct {
 	Data []struct {
 		ID        string `json:"id"`
 		Status    string `json:"status"`
@@ -36,13 +36,13 @@ type subcriptionResponse struct {
 	MaxTotalCost int `json:"max_total_cost"`
 }
 
-type tokenResponse struct {
+type TokenResponse struct {
 	AccessToken string `json:"access_token"`
 	ExpiresIn   int    `json:"expires_in"`
 	TokenType   string `json:"token_type"`
 }
 
-type pollCreateResponse struct {
+type PollCreateResponse struct {
 	Data []struct {
 		Id               string `json:"id"`
 		BroadcasterId    string `json:"broadcaster_id"`

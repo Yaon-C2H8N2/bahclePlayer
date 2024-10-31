@@ -1,9 +1,10 @@
-package twitch
+package controllers
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/songRequests"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
 	"regexp"
 )
 
@@ -27,13 +28,13 @@ func GetNotificationHandler(apiWrapper *ApiWrapper, token string) *NotificationH
 	return handler
 }
 
-func (nh *NotificationHandler) Handle(notification *NotificationMessage) {
+func (nh *NotificationHandler) Handle(notification *twitch.NotificationMessage) {
 	notificationBytes, _ := json.Marshal(notification)
 	nh.handlers[notification.Payload.Subscription.Type](notificationBytes)
 }
 
 func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(eventBytes []byte) {
-	var redemptionEvent = &ChannelPointsCustomRewardRedemptionAddEvent{}
+	var redemptionEvent = &twitch.ChannelPointsCustomRewardRedemptionAddEvent{}
 	err := json.Unmarshal(eventBytes, redemptionEvent)
 	if err != nil {
 		fmt.Println("Failed to unmarshal redemption event")
@@ -65,7 +66,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 }
 
 func (nh *NotificationHandler) handleChannelPollEnd(token string, eventBytes []byte) {
-	var pollEndEvent = &ChannelPollEndEvent{}
+	var pollEndEvent = &twitch.ChannelPollEndEvent{}
 	err := json.Unmarshal(eventBytes, pollEndEvent)
 	if err != nil {
 		fmt.Println("Failed to unmarshal poll end event")

@@ -1,4 +1,4 @@
-package models
+package controllers
 
 import (
 	"fmt"
@@ -14,13 +14,13 @@ type PlayersManager struct {
 	mutex      *sync.Mutex
 	clients    map[string]*websocket.Conn
 	upgrader   websocket.Upgrader
-	eventSub   *twitch.EventSub
-	apiWrapper *twitch.ApiWrapper
+	eventSub   *EventSub
+	apiWrapper *ApiWrapper
 }
 
 func DefaultPlayersManager() *PlayersManager {
-	apiWrapper := twitch.GetApiWrapper()
-	appToken, err := twitch.RequestAppToken(os.Getenv("TWITCH_CLIENT_ID"), os.Getenv("TWITCH_CLIENT_SECRET"))
+	apiWrapper := GetApiWrapper()
+	appToken, err := RequestAppToken(os.Getenv("TWITCH_CLIENT_ID"), os.Getenv("TWITCH_CLIENT_SECRET"))
 	if err != nil {
 		panic(err)
 	}
@@ -35,7 +35,7 @@ func DefaultPlayersManager() *PlayersManager {
 				return true
 			},
 		},
-		eventSub:   twitch.GetEventSub(apiWrapper),
+		eventSub:   GetEventSub(apiWrapper),
 		apiWrapper: apiWrapper,
 	}
 }
@@ -67,7 +67,7 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 func (pm *PlayersManager) mainLoop(token string) {
 	conn := pm.clients[token]
 
-	notifcationHandler := twitch.GetNotificationHandler(pm.apiWrapper, token)
+	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token)
 
 	pm.eventSub.OnEvent(token, func(event twitch.NotificationMessage) {
 		notifcationHandler.Handle(&event)

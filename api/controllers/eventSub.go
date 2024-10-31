@@ -1,8 +1,9 @@
-package twitch
+package controllers
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
 	"github.com/gorilla/websocket"
 	"io"
 	"log"
@@ -12,7 +13,7 @@ import (
 )
 
 type EventSub struct {
-	onEvent    map[string]func(event NotificationMessage)
+	onEvent    map[string]func(event twitch.NotificationMessage)
 	onStarted  func()
 	sessionId  string
 	apiWrapper *ApiWrapper
@@ -20,7 +21,7 @@ type EventSub struct {
 
 func GetEventSub(apiWrapper *ApiWrapper) *EventSub {
 	var newEventSub = &EventSub{
-		onEvent: make(map[string]func(event NotificationMessage)),
+		onEvent: make(map[string]func(event twitch.NotificationMessage)),
 	}
 
 	newEventSub.apiWrapper = apiWrapper
@@ -31,7 +32,7 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
-func (es *EventSub) OnEvent(token string, callback func(event NotificationMessage)) {
+func (es *EventSub) OnEvent(token string, callback func(event twitch.NotificationMessage)) {
 	userId, _ := es.apiWrapper.GetBroadcasterIdFromToken(token)
 
 	es.onEvent[userId] = callback
@@ -56,14 +57,14 @@ func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 		panic(err)
 	}
 
-	var data = subscriptionRequest{
+	var data = twitch.SubscriptionRequest{
 		Type:    "channel.chat.message",
 		Version: "1",
-		Condition: condition{
+		Condition: twitch.Condition{
 			BroadcasterUserId: broadcasterId,
 			UserId:            broadcasterId,
 		},
-		Transport: transport{
+		Transport: twitch.Transport{
 			Method:    "websocket",
 			SessionId: es.sessionId,
 		},
@@ -93,7 +94,7 @@ func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 		return
 	}
 
-	subcriptionResponse := &subcriptionResponse{}
+	subcriptionResponse := &twitch.SubscriptionResponse{}
 	err = json.Unmarshal(body, subcriptionResponse)
 	if err != nil {
 		fmt.Println("Error unmarshalling response:", err)
@@ -119,7 +120,7 @@ func (es *EventSub) listenToMessages() {
 				panic(err)
 			}
 
-			var message = &BaseMessage{}
+			var message = &twitch.BaseMessage{}
 			err = json.Unmarshal(messageBytes, message)
 			if err != nil {
 				log.Printf("err: %s", messageBytes)
@@ -128,7 +129,7 @@ func (es *EventSub) listenToMessages() {
 
 			switch message.Metadata.MessageType {
 			case "session_welcome":
-				var welcomeMessage = &WelcomeMessage{}
+				var welcomeMessage = &twitch.WelcomeMessage{}
 				err = json.Unmarshal(messageBytes, welcomeMessage)
 				if err != nil {
 					log.Printf("err: %s", messageBytes)
@@ -139,7 +140,7 @@ func (es *EventSub) listenToMessages() {
 				go es.onStarted()
 				break
 			case "notification":
-				var notificationMessage = &NotificationMessage{}
+				var notificationMessage = &twitch.NotificationMessage{}
 				err = json.Unmarshal(messageBytes, notificationMessage)
 				if err != nil {
 					log.Printf("err: %s", messageBytes)

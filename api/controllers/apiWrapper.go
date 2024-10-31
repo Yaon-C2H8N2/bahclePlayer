@@ -1,8 +1,9 @@
-package twitch
+package controllers
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
 	"io"
 	"net/http"
 	"strings"
@@ -20,7 +21,7 @@ func GetApiWrapper() *ApiWrapper {
 func RequestAppToken(clientId string, clientSecret string) (string, error) {
 	twitchUrl := "https://id.twitch.tv/oauth2/token"
 
-	request := &appTokenRequest{
+	request := &twitch.AppTokenRequest{
 		ClientId:     clientId,
 		ClientSecret: clientSecret,
 		GrantType:    "client_credentials",
@@ -47,7 +48,7 @@ func RequestAppToken(clientId string, clientSecret string) (string, error) {
 		return "", err
 	}
 
-	var tokenResponse = &tokenResponse{}
+	var tokenResponse = &twitch.TokenResponse{}
 	err = json.Unmarshal(body, tokenResponse)
 	if err != nil {
 		fmt.Println("Error unmarshalling response:", err)
@@ -79,7 +80,7 @@ func (aw *ApiWrapper) GetBroadcasterIdFromToken(userToken string) (string, error
 	if err != nil {
 		return "", err
 	}
-	var userInfoResponse = &userInfoResponse{}
+	var userInfoResponse = &twitch.UserInfoResponse{}
 	err = json.Unmarshal(body, userInfoResponse)
 	if err != nil {
 		return "", err
@@ -114,7 +115,7 @@ func (aw *ApiWrapper) CreatePoll(userToken string, broadcasterId string, title s
 		choicesData = append(choicesData, choiceData)
 	}
 
-	data := pollCreateRequest{
+	data := twitch.PollCreateRequest{
 		BroadcasterId:              broadcasterId,
 		Title:                      title,
 		Choices:                    choicesData,
@@ -145,7 +146,7 @@ func (aw *ApiWrapper) CreatePoll(userToken string, broadcasterId string, title s
 		return "", err
 	}
 
-	pollResponse := &pollCreateResponse{}
+	pollResponse := &twitch.PollCreateResponse{}
 	err = json.Unmarshal(body, pollResponse)
 	if err != nil {
 		return "", err
