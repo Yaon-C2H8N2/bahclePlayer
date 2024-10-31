@@ -32,9 +32,18 @@ func GetNotificationHandler(apiWrapper *ApiWrapper, token string, conn *websocke
 	return handler
 }
 
-func (nh *NotificationHandler) Handle(notification *twitch.NotificationMessage) {
-	notificationBytes, _ := json.Marshal(notification)
-	nh.handlers[notification.Payload.Subscription.Type](notificationBytes)
+func (nh *NotificationHandler) Handle(notificationBytes []byte) {
+	var notification = &twitch.NotificationMessage{}
+	err := json.Unmarshal(notificationBytes, notification)
+	if err != nil {
+		fmt.Println("Failed to unmarshal notification")
+		return
+	}
+
+	eventBytes, _ := json.Marshal(notification.Payload.Event)
+	if _, ok := nh.handlers[notification.Payload.Subscription.Type]; ok {
+		nh.handlers[notification.Payload.Subscription.Type](eventBytes)
+	}
 }
 
 func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(eventBytes []byte) {

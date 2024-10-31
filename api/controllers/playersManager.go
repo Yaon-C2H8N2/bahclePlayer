@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
 	"github.com/gin-gonic/gin"
@@ -70,7 +71,8 @@ func (pm *PlayersManager) mainLoop(token string) {
 	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token, conn)
 
 	pm.eventSub.OnEvent(token, func(event twitch.NotificationMessage) {
-		notifcationHandler.Handle(&event)
+		eventBytes, _ := json.Marshal(event)
+		notifcationHandler.Handle(eventBytes)
 	})
 
 	if pm.eventSub.IsStarted() {

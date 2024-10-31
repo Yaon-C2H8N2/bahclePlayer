@@ -20,7 +20,7 @@ export const Player = () => {
                 const ws = new WebSocket(`ws://localhost:8081/player?access_token=${token}`);
 
                 ws.onmessage = (event) => {
-                    const data = JSON.parse(JSON.parse(event.data).message)
+                    const data = JSON.parse(event.data)
                     setMessages((prev: any) => [...prev, data])
                 }
 
@@ -38,10 +38,10 @@ export const Player = () => {
                 }}>Log out</Button>
             </div>
             <div className={"flex flex-col flex-1 w-full justify-center items-center"}>
-                {messages.map((message: any, index: number) => {
+                {messages.map((event: any, index: number) => {
                     return (
                         <div key={index}>
-                            {message.payload.event.message.text}
+                            {event.message.text}
                         </div>
                     )
                 })}
