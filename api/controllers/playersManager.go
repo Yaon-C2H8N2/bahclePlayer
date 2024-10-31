@@ -67,7 +67,7 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 func (pm *PlayersManager) mainLoop(token string) {
 	conn := pm.clients[token]
 
-	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token)
+	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token, conn)
 
 	pm.eventSub.OnEvent(token, func(event twitch.NotificationMessage) {
 		notifcationHandler.Handle(&event)

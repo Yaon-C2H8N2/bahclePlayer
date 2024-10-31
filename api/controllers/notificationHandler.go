@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/songRequests"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
+	"github.com/gorilla/websocket"
 	"regexp"
 )
 
@@ -13,17 +14,20 @@ type NotificationHandler struct {
 	apiWrapper     *ApiWrapper
 	requestManager *songRequests.RequestManager
 	token          string
+	conn           *websocket.Conn
 }
 
-func GetNotificationHandler(apiWrapper *ApiWrapper, token string) *NotificationHandler {
+func GetNotificationHandler(apiWrapper *ApiWrapper, token string, conn *websocket.Conn) *NotificationHandler {
 	handler := &NotificationHandler{
 		handlers:       make(map[string]func([]byte)),
 		apiWrapper:     apiWrapper,
 		requestManager: songRequests.GetRequestManager(),
 		token:          token,
+		conn:           conn,
 	}
 
 	handler.handlers["channel.channel_points_custom_reward_redemption.add"] = handler.handleChannelPointsCustomRewardRedemptionAdd
+	handler.handlers["channel.poll.end"] = handler.handleChannelPollEnd
 
 	return handler
 }
@@ -65,7 +69,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	nh.requestManager.AddRequest(songRequest)
 }
 
-func (nh *NotificationHandler) handleChannelPollEnd(token string, eventBytes []byte) {
+func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	var pollEndEvent = &twitch.ChannelPollEndEvent{}
 	err := json.Unmarshal(eventBytes, pollEndEvent)
 	if err != nil {
@@ -89,10 +93,14 @@ func (nh *NotificationHandler) handleChannelPollEnd(token string, eventBytes []b
 		}
 	}
 	if maxChoice == "Yes" {
-		//TODO: send song request to player if valid
 		newStatus = "FULFILLED"
+		err = nh.conn.WriteJSON(songRequest)
+		if err != nil {
+			fmt.Println("Failed to send song request to player")
+			return
+		}
 	}
-	err = nh.apiWrapper.UpdateRedemptionStatus(token, songRequest.TwitchRedemptionID, pollEndEvent.BroadcasterUserId, songRequest.TwitchRewardID, newStatus)
+	err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, songRequest.TwitchRedemptionID, pollEndEvent.BroadcasterUserId, songRequest.TwitchRewardID, newStatus)
 	if err != nil {
 		fmt.Println("Failed to update redemption status")
 		return
