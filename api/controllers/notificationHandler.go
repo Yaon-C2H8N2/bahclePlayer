@@ -56,7 +56,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 
 	message := redemptionEvent.UserInput
 	youtubeIdRegexp := regexp.MustCompile(`(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/((watch\?v=|embed/|v/|e/|u/\w+/|v=|\?v=)?)([^#&?]{11})`)
-	youtubeId := youtubeIdRegexp.FindString(message)
+	youtubeId := youtubeIdRegexp.FindAllString(message, -1)[6]
 	if youtubeId == "" {
 		fmt.Println("Failed to extract youtube id from message")
 		err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
