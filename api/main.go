@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/endpoints"
+	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
 	"os"
 )
 import "github.com/gin-gonic/gin"
 
 func main() {
+	utils.Migrate()
+
 	router := gin.Default()
 
 	endpoints.MapRoutes(router)

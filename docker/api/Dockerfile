@@ -19,6 +19,7 @@ FROM alpine:${ALPINE_VERSION}
 
 WORKDIR /app
 
+COPY --from=builder /app/sql/ /app/sql/
 COPY --from=builder /app/build/api /app/api
 
 CMD ["/app/api"]
