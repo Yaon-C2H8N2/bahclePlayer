@@ -7,6 +7,6 @@ type SongRequest struct {
 	YoutubeID          string `json:"youtube_id"`
 	Title              string `json:"title"`
 	Channel            string `json:"channel"`
-	Duration           int    `json:"duration"`
+	Duration           string `json:"duration"`
 	Thumbnail          string `json:"thumbnail"`
 }

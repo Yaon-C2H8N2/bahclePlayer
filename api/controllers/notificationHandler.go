@@ -60,17 +60,27 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	if youtubeId == "" {
 		fmt.Println("Failed to extract youtube id from message")
 		err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
+		if err != nil {
+			fmt.Println("Failed to update redemption status")
+		}
 		return
 	}
+	youtubeResults, err := GetVideoInfo(youtubeId)
+	if err != nil {
+		fmt.Println("Failed to get video info")
+		err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
+		return
+	}
+	video := youtubeResults.Items[0]
 
 	var songRequest = songRequests.SongRequest{}
 	songRequest.TwitchRedemptionID = redemptionEvent.Id
 	songRequest.TwitchRewardID = redemptionEvent.Reward.Id
 	songRequest.YoutubeID = youtubeId
-	songRequest.Title = ""     //TODO: get video title
-	songRequest.Channel = ""   //TODO: get video channel
-	songRequest.Duration = 0   //TODO: get video duration
-	songRequest.Thumbnail = "" //TODO: get video base64 thumbnail or url
+	songRequest.Title = video.Snippet.Title
+	songRequest.Channel = video.Snippet.ChannelTitle
+	songRequest.Duration = video.ContentDetails.Duration
+	songRequest.Thumbnail = video.Snippet.Thumbnails.Default.Url
 
 	pollTitle := fmt.Sprintf("Should we play %s by %s?", songRequest.Title, songRequest.Channel)
 	twitchPollId, err := nh.apiWrapper.CreatePoll(nh.token, redemptionEvent.BroadcasterUserId, pollTitle, []string{"Yes", "No"}, 60)
