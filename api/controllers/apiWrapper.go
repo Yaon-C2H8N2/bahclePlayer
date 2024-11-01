@@ -152,6 +152,10 @@ func (aw *ApiWrapper) CreatePoll(userToken string, broadcasterId string, title s
 		return "", err
 	}
 
+	if len(pollResponse.Data) == 0 {
+		return "", fmt.Errorf("failed to create poll : %s", string(body))
+	}
+
 	return pollResponse.Data[0].Id, nil
 }
 
