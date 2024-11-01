@@ -3,17 +3,19 @@ package twitch
 import "time"
 
 type UserInfoResponse struct {
-	Data []struct {
-		ID              string `json:"id"`
-		Login           string `json:"login"`
-		DisplayName     string `json:"display_name"`
-		Type            string `json:"type"`
-		BroadcasterType string `json:"broadcaster_type"`
-		Description     string `json:"description"`
-		ProfileImageUrl string `json:"profile_image_url"`
-		OfflineImageUrl string `json:"offline_image_url"`
-		ViewCount       int    `json:"view_count"`
-	} `json:"data"`
+	Data []UserInfo `json:"data"`
+}
+
+type UserInfo struct {
+	ID              string `json:"id"`
+	Login           string `json:"login"`
+	DisplayName     string `json:"display_name"`
+	Type            string `json:"type"`
+	BroadcasterType string `json:"broadcaster_type"`
+	Description     string `json:"description"`
+	ProfileImageUrl string `json:"profile_image_url"`
+	OfflineImageUrl string `json:"offline_image_url"`
+	ViewCount       int    `json:"view_count"`
 }
 
 type SubscriptionResponse struct {

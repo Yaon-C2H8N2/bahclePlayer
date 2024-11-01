@@ -53,6 +53,9 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		fmt.Println("Failed to unmarshal redemption event")
 		return
 	}
+	//TODO : Get PLAYLIST_REDEMPTION and QUEUE_REDEMPTION values from database
+
+	//TODO : if redemptionEvent.Reward.Id not equal to PLAYLIST_REDEMPTION or QUEUE_REDEMPTION, return
 
 	message := redemptionEvent.UserInput
 	youtubeIdRegexp := regexp.MustCompile(`(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/((watch\?v=|embed/|v/|e/|u/\w+/|v=|\?v=)?)([^#&?]{11})`)

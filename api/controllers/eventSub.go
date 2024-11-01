@@ -33,9 +33,9 @@ func (es *EventSub) Start() {
 }
 
 func (es *EventSub) OnEvent(token string, callback func(event twitch.NotificationMessage)) {
-	userId, _ := es.apiWrapper.GetBroadcasterIdFromToken(token)
+	userId, _ := es.apiWrapper.GetUserInfoFromToken(token)
 
-	es.onEvent[userId] = callback
+	es.onEvent[userId.ID] = callback
 }
 
 func (es *EventSub) OnStarted(callback func()) {
@@ -52,7 +52,7 @@ func (es *EventSub) DropAllSubscriptions(userToken string) {
 
 func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
-	broadcasterId, err := es.apiWrapper.GetBroadcasterIdFromToken(userToken)
+	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
 		panic(err)
 	}
@@ -61,8 +61,8 @@ func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 		Type:    "channel.chat.message",
 		Version: "1",
 		Condition: twitch.Condition{
-			BroadcasterUserId: broadcasterId,
-			UserId:            broadcasterId,
+			BroadcasterUserId: broadcasterId.ID,
+			UserId:            broadcasterId.ID,
 		},
 		Transport: twitch.Transport{
 			Method:    "websocket",

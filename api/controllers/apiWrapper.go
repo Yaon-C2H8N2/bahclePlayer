@@ -58,13 +58,13 @@ func RequestAppToken(clientId string, clientSecret string) (string, error) {
 	return tokenResponse.AccessToken, nil
 }
 
-func (aw *ApiWrapper) GetBroadcasterIdFromToken(userToken string) (string, error) {
+func (aw *ApiWrapper) GetUserInfoFromToken(userToken string) (twitch.UserInfo, error) {
 	twitchUrl := "https://api.twitch.tv/helix/users"
 
 	httpClient := &http.Client{}
 	req, err := http.NewRequest("GET", twitchUrl, nil)
 	if err != nil {
-		return "", err
+		return twitch.UserInfo{}, err
 	}
 
 	req.Header.Add("Authorization", "Bearer "+userToken)
@@ -72,21 +72,21 @@ func (aw *ApiWrapper) GetBroadcasterIdFromToken(userToken string) (string, error
 
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return twitch.UserInfo{}, err
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", err
+		return twitch.UserInfo{}, err
 	}
 	var userInfoResponse = &twitch.UserInfoResponse{}
 	err = json.Unmarshal(body, userInfoResponse)
 	if err != nil {
-		return "", err
+		return twitch.UserInfo{}, err
 	}
 
-	return userInfoResponse.Data[0].ID, nil
+	return userInfoResponse.Data[0], nil
 }
 
 func (aw *ApiWrapper) SetAppToken(token string) {
