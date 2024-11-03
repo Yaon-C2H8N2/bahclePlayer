@@ -11,7 +11,7 @@ import (
 
 func GetVideoInfo(id string) (youtube.VideoInfoResponse, error) {
 	youtubeUrl := "https://www.googleapis.com/youtube/v3/videos"
-	youtubeUrl += "?id=" + id + "&part=snippet" + "&key=" + os.Getenv("YOUTUBE_API_KEY")
+	youtubeUrl += "?id=" + id + "&part=snippet&part=contentDetails" + "&key=" + os.Getenv("YOUTUBE_API_KEY")
 
 	httpClient := &http.Client{}
 	req, err := http.NewRequest("GET", youtubeUrl, nil)

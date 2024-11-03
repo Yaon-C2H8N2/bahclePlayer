@@ -116,6 +116,10 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	}
 	if maxChoice == "Yes" {
 		newStatus = "FULFILLED"
+
+		//TODO : insert song request to database
+		//TODO : return song from insert query
+
 		err = nh.conn.WriteJSON(songRequest)
 		if err != nil {
 			fmt.Println("Failed to send song request to player")

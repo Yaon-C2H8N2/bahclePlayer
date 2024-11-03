@@ -5,10 +5,9 @@ import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
 	"github.com/gin-gonic/gin"
-	"os"
 )
 
-func login(c *gin.Context) {
+func login(c *gin.Context, aw *controllers.ApiWrapper) {
 	token := c.Query("access_token")
 
 	if token == "" {
@@ -17,8 +16,6 @@ func login(c *gin.Context) {
 		})
 	}
 
-	aw := controllers.GetApiWrapper()
-	aw.SetClientId(os.Getenv("TWITCH_CLIENT_ID"))
 	userInfo, err := aw.GetUserInfoFromToken(token)
 	if err != nil {
 		c.JSON(500, gin.H{
