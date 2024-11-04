@@ -31,6 +31,7 @@ jobs:
           context: .
           file: ./docker/api/Dockerfile
           tags: ghcr.io/${{ env.REPO }}/bahcleplayer-api:${{ github.event.inputs.image_version }},ghcr.io/${{ env.REPO }}/bahcleplayer-api:latest
+          push: 'true'
 
   build-client:
     runs-on: ubuntu-latest
@@ -55,6 +56,7 @@ jobs:
           context: .
           file: ./docker/client/Dockerfile
           tags: ghcr.io/${{ env.REPO }}/bahcleplayer-client:${{ github.event.inputs.image_version }},ghcr.io/${{ env.REPO }}/bahcleplayer-client:latest
+          push: 'true'
 
   finalize:
     needs: [build-api, build-client]
