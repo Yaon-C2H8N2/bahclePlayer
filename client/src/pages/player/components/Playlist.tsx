@@ -12,6 +12,7 @@ interface IPlaylistProps {
 interface IVideoCardProps {
     video: any
     isPlaying?: boolean
+    onRemove?: (video: any) => void
 }
 
 const VideoCard = (props: IVideoCardProps) => {
@@ -28,9 +29,7 @@ const VideoCard = (props: IVideoCardProps) => {
                 </div>
             </div>
             {props.isPlaying && <Play className={"m-3 min-w-5 max-w-5"}/>}
-            <Trash onClick={()=>{
-                // TODO : handle remove video
-            }} color={"#FF0000"} className={"m-3 min-w-5 max-w-5 hidden hover:cursor-pointer group-hover:block"}/>
+            <Trash onClick={()=>{props.onRemove && props.onRemove(props.video)}} color={"#FF0000"} className={"m-3 min-w-5 max-w-5 hidden hover:cursor-pointer group-hover:block"}/>
         </Card>
     )
 }
@@ -45,7 +44,7 @@ export const Playlist = (props: IPlaylistProps) => {
                         {props.queue.length === 0 && <div>Queue is empty</div>}
                         {props.queue.map((video: any) => {
                             return (
-                                <VideoCard key={video.video_id} video={video} isPlaying={props?.currentlyPlaying === video}/>
+                                <VideoCard key={video.video_id} video={video} isPlaying={props?.currentlyPlaying === video} onRemove={props.onRemoveVideo}/>
                             )
                         })}
                     </AccordionContent>
@@ -58,7 +57,7 @@ export const Playlist = (props: IPlaylistProps) => {
                         {props.playlist.length === 0 && <div>Playlist is empty</div>}
                         {props.playlist.map((video: any) => {
                             return (
-                                <VideoCard key={video.video_id} video={video} isPlaying={props?.currentlyPlaying === video}/>
+                                <VideoCard key={video.video_id} video={video} isPlaying={props?.currentlyPlaying === video} onRemove={props.onRemoveVideo}/>
                             )
                         })}
                     </AccordionContent>

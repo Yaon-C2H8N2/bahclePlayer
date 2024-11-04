@@ -51,3 +51,10 @@ func login(c *gin.Context, aw *controllers.ApiWrapper) {
 		"user":  user,
 	})
 }
+
+func logout(c *gin.Context) {
+	c.Header("Set-Cookie", "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
+	c.JSON(200, gin.H{
+		"message": "Logged out",
+	})
+}

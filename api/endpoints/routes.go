@@ -14,6 +14,9 @@ func MapRoutes(router *gin.Engine) {
 	router.GET("/login", func(c *gin.Context) {
 		login(c, aw)
 	})
+	router.GET("/logout", func(c *gin.Context) {
+		logout(c)
+	})
 	router.GET("/player", func(c *gin.Context) {
 		getPlayer(c, pm)
 	})

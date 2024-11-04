@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import {Button} from "@/components/ui/button.tsx";
 import {fetchApi} from "@/lib/network.ts";
-import {Playlist} from "@/components/Playlist.tsx";
+import {Playlist} from "./components/Playlist.tsx";
 import ReactPlayer from "react-player";
 import {SkipForward} from "lucide-react";
 
@@ -42,6 +42,8 @@ export const Player = () => {
                     } else if(data.type === "PLAYLIST"){
                         setPlaylist([...playlist, data.video])
                     }
+
+                    //TODO : toaster success
                 }
 
                 return ws;
@@ -95,6 +97,7 @@ export const Player = () => {
     }
 
     const removeVideo = (video: any) => {
+        console.log(video)
         fetchApi("/api/playlist", {method: "DELETE", body: JSON.stringify({video_id: video.video_id})})
             .then((res) => {
                 return res.json()
@@ -108,11 +111,6 @@ export const Player = () => {
 
     return (
         <div className={"flex flex-col items-center w-full h-[100vh]"}>
-            <div className={"flex flex-row w-full p-3 items-center justify-end"}>
-                <Button onClick={() => {
-                    //todo: logout
-                }}>Log out</Button>
-            </div>
             <div className={"flex flex-row w-full p-14 gap-10"}>
                 <div className={"flex w-2/3 justify-start items-center flex-col gap-2"}>
                     <div className={"w-full min-w-96 min-h-[60vh] p-5"}>
