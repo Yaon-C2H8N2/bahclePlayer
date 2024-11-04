@@ -56,9 +56,42 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		fmt.Println("Failed to unmarshal redemption event")
 		return
 	}
-	//TODO : Get PLAYLIST_REDEMPTION and QUEUE_REDEMPTION values from database
 
-	//TODO : if redemptionEvent.Reward.Id not equal to PLAYLIST_REDEMPTION or QUEUE_REDEMPTION, return
+	conn := utils.GetConnection()
+	defer conn.Close(context.Background())
+
+	sql := `
+			SELECT config, value
+			FROM users_config
+			WHERE user_id = $1
+		`
+	rows := utils.DoRequest(conn, sql, redemptionEvent.BroadcasterUserId)
+	var config []struct{ Config, Value string }
+	for rows.Next() {
+		var result struct{ Config, Value string }
+		err = rows.Scan(&result.Config, &result.Value)
+		if err != nil {
+			fmt.Println("Failed to get user config")
+			return
+		}
+		config = append(config, result)
+	}
+	if len(config) == 0 {
+		fmt.Println("Failed to get user config")
+		return
+	}
+
+	found := false
+	for _, c := range config {
+		if (c.Config == "PLAYLIST_REDEMPTION" || c.Config == "QUEUE_REDEMPTION") && c.Value == redemptionEvent.Reward.Id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		fmt.Println("Redemption reward not found in user config")
+		return
+	}
 
 	message := redemptionEvent.UserInput
 	youtubeIdRegexp := regexp.MustCompile(`(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/((watch\?v=|embed/|v/|e/|u/\w+/|v=|\?v=)?)([^#&?]{11})`)
@@ -123,16 +156,50 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 		conn := utils.GetConnection()
 		defer conn.Close(context.Background())
 
-		//TODO : compare redemptionRequest id with PLAYLIST_REDEMPTION and QUEUE_REDEMPTION values from database to get proper type
-		requestType := "PLAYLIST"
+		sql := `
+			SELECT config, value
+			FROM users_config
+			WHERE user_id = $1
+		`
+		rows := utils.DoRequest(conn, sql, pollEndEvent.BroadcasterUserId)
+		var config []struct{ Config, Value string }
+		for rows.Next() {
+			var result struct{ Config, Value string }
+			err = rows.Scan(&result.Config, &result.Value)
+			if err != nil {
+				fmt.Println("Failed to get user config")
+				return
+			}
+			config = append(config, result)
+		}
+		if len(config) == 0 {
+			fmt.Println("Failed to get user config")
+			return
+		}
+
+		requestType := ""
+		for _, c := range config {
+			if (c.Config == "PLAYLIST_REDEMPTION" || c.Config == "QUEUE_REDEMPTION") && c.Value == songRequest.TwitchRewardID {
+				if c.Config == "PLAYLIST_REDEMPTION" {
+					requestType = "PLAYLIST"
+				} else {
+					requestType = "QUEUE"
+				}
+				break
+			}
+		}
+		if requestType == "" {
+			fmt.Println("Redemption reward not found in user config")
+			return
+		}
 
 		var newVideo = &models.UsersVideos{}
-		sql := `
+		sql = `
 				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING *;
 			`
-		rows := utils.DoRequest(
+		rows = utils.DoRequest(
 			conn,
 			sql,
 			pollEndEvent.BroadcasterUserId,
