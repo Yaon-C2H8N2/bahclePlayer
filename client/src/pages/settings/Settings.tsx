@@ -22,7 +22,7 @@ export const Settings = (props: ISettingsProps) => {
         fetchApi("/api/rewards").then((res) => {
             return res.json()
         }).then((data) => {
-            setRewards(data)
+            setRewards(data.rewards ?? [])
             setLoading(false)
         })
     }, [])
@@ -79,6 +79,7 @@ export const Settings = (props: ISettingsProps) => {
                             </>
                         )
                     })}
+                    {rewards.length === 0 && <div className={"col-span-3 flex flex-row justify-center"}>No channel points rewards found</div>}
                 </div>
             )}
             <div className={"flex flex-row justify-end gap-2 w-full"}>
