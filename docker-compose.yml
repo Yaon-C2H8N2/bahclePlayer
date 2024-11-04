@@ -5,6 +5,8 @@ services:
       dockerfile: docker/api/Dockerfile
     ports:
       - "8081:${API_PORT}"
+    depends_on:
+      - database
     env_file:
       - .env
 

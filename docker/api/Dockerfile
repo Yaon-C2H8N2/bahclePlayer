@@ -6,9 +6,6 @@ FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
 
 WORKDIR /app
 
-COPY .env .env
-RUN export $(cat .env | xargs)
-
 COPY api/go.mod api/go.sum ./
 RUN go mod download
 

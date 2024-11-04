@@ -32,4 +32,10 @@ func MapRoutes(router *gin.Engine) {
 	router.GET("/rewards", func(c *gin.Context) {
 		getRewardsIds(c, aw)
 	})
+	router.GET("/appinfo", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"TWITCH_CLIENT_ID": os.Getenv("TWITCH_CLIENT_ID"),
+			"APP_URL":          os.Getenv("APP_URL"),
+		})
+	})
 }
