@@ -67,3 +67,43 @@ type PollCreateResponse struct {
 		StartedAt                  time.Time `json:"started_at"`
 	} `json:"data"`
 }
+
+type RewardResponse struct {
+	Data []Reward `json:"data"`
+}
+
+type Reward struct {
+	BroadcasterName     string      `json:"broadcaster_name"`
+	BroadcasterLogin    string      `json:"broadcaster_login"`
+	BroadcasterId       string      `json:"broadcaster_id"`
+	Id                  string      `json:"id"`
+	Image               interface{} `json:"image"`
+	BackgroundColor     string      `json:"background_color"`
+	IsEnabled           bool        `json:"is_enabled"`
+	Cost                int         `json:"cost"`
+	Title               string      `json:"title"`
+	Prompt              string      `json:"prompt"`
+	IsUserInputRequired bool        `json:"is_user_input_required"`
+	MaxPerStreamSetting struct {
+		IsEnabled    bool `json:"is_enabled"`
+		MaxPerStream int  `json:"max_per_stream"`
+	} `json:"max_per_stream_setting"`
+	MaxPerUserPerStreamSetting struct {
+		IsEnabled           bool `json:"is_enabled"`
+		MaxPerUserPerStream int  `json:"max_per_user_per_stream"`
+	} `json:"max_per_user_per_stream_setting"`
+	GlobalCooldownSetting struct {
+		IsEnabled             bool `json:"is_enabled"`
+		GlobalCooldownSeconds int  `json:"global_cooldown_seconds"`
+	} `json:"global_cooldown_setting"`
+	IsPaused     bool `json:"is_paused"`
+	IsInStock    bool `json:"is_in_stock"`
+	DefaultImage struct {
+		Url1X string `json:"url_1x"`
+		Url2X string `json:"url_2x"`
+		Url4X string `json:"url_4x"`
+	} `json:"default_image"`
+	ShouldRedemptionsSkipRequestQueue bool        `json:"should_redemptions_skip_request_queue"`
+	RedemptionsRedeemedCurrentStream  interface{} `json:"redemptions_redeemed_current_stream"`
+	CooldownExpiresAt                 interface{} `json:"cooldown_expires_at"`
+}

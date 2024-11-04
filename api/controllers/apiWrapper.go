@@ -181,3 +181,35 @@ func (aw *ApiWrapper) UpdateRedemptionStatus(userToken string, redemptionId stri
 
 	return nil
 }
+
+func (aw *ApiWrapper) GetChannelRewards(userToken string, broadcasterId string) ([]twitch.Reward, error) {
+	twitchUrl := fmt.Sprintf("https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=%s", broadcasterId)
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("GET", twitchUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", aw.clientId)
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	rewardsResponse := &twitch.RewardResponse{}
+	err = json.Unmarshal(body, rewardsResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return rewardsResponse.Data, nil
+}

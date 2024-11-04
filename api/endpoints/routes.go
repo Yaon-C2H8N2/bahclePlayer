@@ -23,4 +23,13 @@ func MapRoutes(router *gin.Engine) {
 	router.GET("/playlist", func(c *gin.Context) {
 		getPlaylistAndQueue(c, aw)
 	})
+	router.DELETE("/playlist", func(c *gin.Context) {
+		deleteVideo(c, aw)
+	})
+	router.GET("/settings", func(c *gin.Context) {
+		saveSettings(c, aw)
+	})
+	router.GET("/rewards", func(c *gin.Context) {
+		getRewardsIds(c, aw)
+	})
 }

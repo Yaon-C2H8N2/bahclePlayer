@@ -23,8 +23,9 @@ create type config_type as enum ('PLAYLIST_REDEMPTION', 'QUEUE_REDEMPTION');
 
 create table users_config
 (
-    config_id serial primary key,
+    config_id serial,
     user_id integer references users (user_id),
     config  config_type not null,
-    value   varchar     not null
+    value   varchar     not null,
+    primary key (user_id, config)
 )

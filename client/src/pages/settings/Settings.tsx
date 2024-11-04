@@ -2,6 +2,7 @@ import {useEffect, useState} from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import {LoaderCircle} from "lucide-react";
+import {fetchApi} from "@/lib/network.ts";
 
 interface ISettingsProps {
     onClose: () => void
@@ -18,14 +19,20 @@ export const Settings = (props: ISettingsProps) => {
             window.location.href = "/"
         }
 
-        // TODO : fetch channel rewards
-        setRewards([{id: 1, title: "test"}, {id: 2, title: "test2"}, {id: 3, title: "test3"}])
-        setLoading(false)
+        fetchApi("/api/rewards").then((res) => {
+            return res.json()
+        }).then((data) => {
+            setRewards(data)
+            setLoading(false)
+        })
     }, [])
 
     const handleSave = () => {
-        // TODO : save rewards
-        props.onClose()
+        setLoading(true)
+        fetchApi(`/api/settings?playlist_redemption=${playlistReward.id}&queue_redemption=${queueReward.id}`).then(() => {
+            setLoading(false)
+            props.onClose()
+        })
     }
 
     return (

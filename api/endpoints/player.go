@@ -71,3 +71,43 @@ func getPlaylistAndQueue(c *gin.Context, aw *controllers.ApiWrapper) {
 		"data":    results,
 	})
 }
+
+func deleteVideo(c *gin.Context, aw *controllers.ApiWrapper) {
+	token := c.Request.Header.Get("Authorization")
+	token = token[7:]
+	if token == "" {
+		c.JSON(400, gin.H{
+			"error": "missing access_token",
+		})
+		return
+	}
+
+	videoID := c.Query("video_id")
+	if videoID == "" {
+		c.JSON(400, gin.H{
+			"error": "missing video_id",
+		})
+		return
+	}
+
+	userInfo, err := aw.GetUserInfoFromToken(token)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	conn := utils.GetConnection()
+	defer conn.Close(context.Background())
+
+	sql := `
+			DELETE FROM users_videos
+			WHERE user_id = $1 AND video_id = $2
+		`
+	utils.DoRequest(conn, sql, userInfo.ID, videoID)
+
+	c.JSON(200, gin.H{
+		"message": "Video deleted",
+	})
+}
