@@ -81,6 +81,7 @@ export const Player = () => {
         if(currentVideo.type === "QUEUE") {
             const newQueue = queue.filter((video: any) => video.video_id !== currentVideo.video_id)
             setQueue(newQueue)
+            removeVideo(currentVideo)
             if(newQueue.length > 0){
                 setCurrentVideo(newQueue[0])
             } else {
@@ -93,6 +94,18 @@ export const Player = () => {
         }
     }
 
+    const removeVideo = (video: any) => {
+        fetchApi("/api/playlist", {method: "DELETE", body: JSON.stringify({video_id: video.video_id})})
+            .then((res) => {
+                return res.json()
+            }
+        ).then((data) => {
+            if(data.status === "success"){
+                //TODO : toaster success
+            }
+        })
+    }
+
     return (
         <div className={"flex flex-col items-center w-full h-[100vh]"}>
             <div className={"flex flex-row w-full p-3 items-center justify-end"}>
@@ -101,8 +114,8 @@ export const Player = () => {
                 }}>Log out</Button>
             </div>
             <div className={"flex flex-row w-full p-14 gap-10"}>
-                <div className={"flex w-2/3 justify-center items-center flex-col gap-2"}>
-                    <div className={"min-w-full min-h-[50vh]"}>
+                <div className={"flex w-2/3 justify-start items-center flex-col gap-2"}>
+                    <div className={"w-full min-w-96 min-h-[60vh] p-5"}>
                         <ReactPlayer
                             height={"100%"}
                             width={"100%"}
@@ -128,7 +141,7 @@ export const Player = () => {
                     </div>
                 </div>
                 <div className={"w-1/3 max-h-[80vh] min-h-[80vh] overflow-y-auto"}>
-                    <Playlist playlist={playlist} queue={queue} currentlyPlaying={currentVideo}/>
+                    <Playlist playlist={playlist} queue={queue} currentlyPlaying={currentVideo} onRemoveVideo={(video) => removeVideo(video.video_id)}/>
                 </div>
             </div>
         </div>
