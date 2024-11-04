@@ -34,7 +34,7 @@ export const Player = () => {
             socket = async () => {
                 const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
                 const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-                const ws = new WebSocket(`${wsProtocol}://localhost:8081/player?access_token=${token}`);
+                const ws = new WebSocket(`${wsProtocol}://${window.location.host}/api/player?access_token=${token}`);
 
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data)
