@@ -1,10 +1,13 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/songRequests"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
 	"github.com/gorilla/websocket"
 	"regexp"
 )
@@ -117,10 +120,37 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	if maxChoice == "Yes" {
 		newStatus = "FULFILLED"
 
-		//TODO : insert song request to database
-		//TODO : return song from insert query
+		conn := utils.GetConnection()
+		defer conn.Close(context.Background())
 
-		err = nh.conn.WriteJSON(songRequest)
+		//TODO : compare redemptionRequest id with PLAYLIST_REDEMPTION and QUEUE_REDEMPTION values from database to get proper type
+		requestType := "PLAYLIST"
+
+		var newVideo = &models.UsersVideos{}
+		sql := `
+				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				RETURNING *;
+			`
+		rows := utils.DoRequest(
+			conn,
+			sql,
+			pollEndEvent.BroadcasterUserId,
+			songRequest.YoutubeID,
+			"https://www.youtube.com/watch?v="+songRequest.YoutubeID,
+			songRequest.Title,
+			songRequest.Duration,
+			requestType,
+			songRequest.Thumbnail,
+			"twitch", //TODO : get added_by from user
+		)
+		if !rows.Next() {
+			fmt.Println("Failed to insert video into database")
+			return
+		}
+		rows.Scan(newVideo)
+
+		err = nh.conn.WriteJSON(newVideo)
 		if err != nil {
 			fmt.Println("Failed to send song request to player")
 			return

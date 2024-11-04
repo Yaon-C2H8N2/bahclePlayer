@@ -11,7 +11,7 @@ create table users_videos
 (
     video_id   serial primary key,
     user_id    integer references users (user_id),
-    youtube_id varchar    not null unique,
+    youtube_id varchar    not null,
     url        varchar    not null,
     title      varchar    not null,
     duration   varchar    not null,
