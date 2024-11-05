@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 type PlayersManager struct {
@@ -85,7 +86,7 @@ func (pm *PlayersManager) mainLoop(token string) {
 	}
 
 	for {
-		_, _, err := conn.ReadMessage()
+		err := conn.WriteMessage(websocket.PingMessage, nil)
 		if err != nil {
 			fmt.Println("Client disconnected")
 			conn.Close()
@@ -98,5 +99,6 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 			break
 		}
+		time.Sleep(30 * time.Second)
 	}
 }

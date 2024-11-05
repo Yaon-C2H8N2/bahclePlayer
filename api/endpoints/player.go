@@ -18,10 +18,6 @@ func getPlayer(c *gin.Context, pm *controllers.PlayersManager) {
 	}
 
 	pm.CreatePlayer(c)
-
-	c.JSON(200, gin.H{
-		"message": "Player created",
-	})
 }
 
 func getPlaylistAndQueue(c *gin.Context, aw *controllers.ApiWrapper) {

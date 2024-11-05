@@ -61,7 +61,7 @@ export const Player = () => {
         fetchApi("/api/playlist").then((res) => {
             return res.json();
         }).then((data) => {
-            const videos: any[] = data.data;
+            const videos: any[] = data.data ?? [];
             videos.forEach((video) => {
                 video.duration = formatISODuration(video.duration)
             })
@@ -115,17 +115,21 @@ export const Player = () => {
             <div className={"flex flex-row w-full p-14 gap-10"}>
                 <div className={"flex w-2/3 justify-start items-center flex-col gap-2"}>
                     <div className={"w-full min-w-96 min-h-[60vh] p-5"}>
-                        <ReactPlayer
-                            height={"100%"}
-                            width={"100%"}
-                            url={currentVideo?.url}
-                            playing={true}
-                            muted={true}
-                            controls={true}
-                            onEnded={() => {
-                                handleNextVideo()
-                            }}
-                        />
+                        {playlist.length > 0 || queue.length > 0 ? (
+                            <ReactPlayer
+                                height={"100%"}
+                                width={"100%"}
+                                url={currentVideo?.url}
+                                playing={true}
+                                muted={true}
+                                controls={true}
+                                onEnded={() => {
+                                    handleNextVideo()
+                                }}
+                            />
+                        ) : (
+                            <div>Playlist is empty</div>
+                        )}
                     </div>
                     <div className={"flex flex-row items-center gap-2 justify-between w-2/3"}>
                         <div>{currentVideo?.title}</div>
