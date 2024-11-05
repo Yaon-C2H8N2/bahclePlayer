@@ -126,8 +126,18 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	songRequest.Duration = video.ContentDetails.Duration
 	songRequest.Thumbnail = video.Snippet.Thumbnails.Default.Url
 
-	pollTitle := fmt.Sprintf("Should we play %s by %s?", songRequest.Title, songRequest.Channel)
+	//TODO : create settings for when to add the track to the playlist (immediately, after poll, ...)
+	pollTitle := fmt.Sprintf("Add the current track to playlist ?")
 	twitchPollId, err := nh.apiWrapper.CreatePoll(nh.token, redemptionEvent.BroadcasterUserId, pollTitle, []string{"Yes", "No"}, 60)
+	if err != nil || twitchPollId == "" {
+		if err != nil {
+			fmt.Printf("Failed to create poll : %s\n", err.Error())
+		} else {
+			fmt.Println("Failed to create poll : empty poll id")
+		}
+		err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
+		return
+	}
 	songRequest.TwitchPollID = twitchPollId
 	nh.requestManager.AddRequest(songRequest)
 }
@@ -140,6 +150,9 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 		return
 	}
 
+	if pollEndEvent.Status != "completed" {
+		return
+	}
 	songRequest := nh.requestManager.GetRequest(pollEndEvent.Id)
 	if songRequest.TwitchPollID == "" {
 		fmt.Println("Failed to get song request from poll id")
@@ -150,12 +163,13 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	maxChoice := ""
 	newStatus := "CANCELED"
 	for _, choice := range pollEndEvent.Choices {
-		if choice.BitsVotes+choice.ChannelPointsVotes > maxVotes {
-			maxVotes = choice.BitsVotes + choice.ChannelPointsVotes
+		if choice.Votes > maxVotes {
+			maxVotes = choice.Votes
 			maxChoice = choice.Title
 		}
 	}
-	if maxChoice == "Yes" {
+
+	if maxChoice == "Yes" && maxVotes > 0 {
 		newStatus = "FULFILLED"
 
 		conn := utils.GetConnection()
@@ -198,7 +212,7 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 			return
 		}
 
-		var newVideo = &models.UsersVideos{}
+		var newVideo = models.UsersVideos{}
 		sql = `
 				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -220,7 +234,7 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 			fmt.Println("Failed to insert video into database")
 			return
 		}
-		rows.Scan(newVideo)
+		rows.Scan(&newVideo.VideoId, &newVideo.UserId, &newVideo.YoutubeId, &newVideo.Url, &newVideo.Title, &newVideo.Duration, &newVideo.Type, &newVideo.CreatedAt, &newVideo.ThumbnailUrl, &newVideo.AddedBy)
 
 		err = nh.conn.WriteJSON(newVideo)
 		if err != nil {
