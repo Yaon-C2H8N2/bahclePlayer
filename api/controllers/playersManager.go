@@ -78,9 +78,11 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 	if pm.eventSub.IsStarted() {
 		pm.eventSub.SubscribeToMessageEvents(token)
+		pm.eventSub.SubscribeToRedemptionEvents(token)
 	} else {
 		pm.eventSub.OnStarted(func() {
 			pm.eventSub.SubscribeToMessageEvents(token)
+			pm.eventSub.SubscribeToRedemptionEvents(token)
 		})
 		pm.eventSub.Start()
 	}

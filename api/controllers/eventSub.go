@@ -103,6 +103,58 @@ func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
 }
 
+func (es *EventSub) SubscribeToRedemptionEvents(userToken string) {
+	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
+	if err != nil {
+		panic(err)
+	}
+
+	var data = twitch.SubscriptionRequest{
+		Type:    "channel.channel_points_custom_reward_redemption.add",
+		Version: "1",
+		Condition: twitch.Condition{
+			BroadcasterUserId: broadcasterId.ID,
+		},
+		Transport: twitch.Transport{
+			Method:    "websocket",
+			SessionId: es.sessionId,
+		},
+	}
+
+	httpClient := &http.Client{}
+	bytes, _ := json.Marshal(data)
+	fmt.Println("Request body:", string(bytes))
+	req, err := http.NewRequest("POST", twitchUrl, strings.NewReader(string(bytes)))
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return
+	}
+
+	subcriptionResponse := &twitch.SubscriptionResponse{}
+	err = json.Unmarshal(body, subcriptionResponse)
+	if err != nil {
+		fmt.Println("Error unmarshalling response:", err)
+		return
+	}
+	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
+}
+
 func (es *EventSub) listenToMessages() {
 	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
 	conn, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)

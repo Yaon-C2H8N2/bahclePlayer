@@ -64,8 +64,8 @@ func saveSettings(c *gin.Context, aw *controllers.ApiWrapper) {
 
 	sql := `
 		INSERT INTO users_config (user_id, config, value)
-		VALUES ($1, 'PLAYLIST_REDEMPTION', $2),
-       		   ($1, 'QUEUE_REDEMPTION', $3)
+		VALUES ((SELECT user_id FROM users WHERE twitch_id = $1), 'PLAYLIST_REDEMPTION', $2),
+       		   ((SELECT user_id FROM users WHERE twitch_id = $1), 'QUEUE_REDEMPTION', $3)
 		ON CONFLICT (user_id, config) DO UPDATE
 		SET value = excluded.value;
 	`
