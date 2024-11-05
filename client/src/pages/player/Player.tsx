@@ -39,9 +39,9 @@ export const Player = () => {
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data)
                     if(data.type === "QUEUE"){
-                        setQueue([...queue, data.video])
+                        setQueue([...queue, data])
                     } else if(data.type === "PLAYLIST"){
-                        setPlaylist([...playlist, data.video])
+                        setPlaylist([...playlist, data])
                     }
 
                     //TODO : toaster success
@@ -98,7 +98,6 @@ export const Player = () => {
     }
 
     const removeVideo = (video: any) => {
-        console.log(video)
         fetchApi("/api/playlist", {method: "DELETE", body: JSON.stringify({video_id: video.video_id})})
             .then((res) => {
                 return res.json()
