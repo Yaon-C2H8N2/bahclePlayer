@@ -58,9 +58,19 @@ func (es *EventSub) DropAllSubscriptions(userToken string) {
 }
 
 func (es *EventSub) InitSubscriptions(userToken string) {
-	es.subscribeToMessageEvents(userToken)
-	es.subscribeToRedemptionEvents(userToken)
-	es.subscribeToPollEvents(userToken)
+	var err error
+	err = es.subscribeToMessageEvents(userToken)
+	if err != nil {
+		fmt.Printf("Error subscribing to message events with token %s: %s\n", userToken, err)
+	}
+	err = es.subscribeToRedemptionEvents(userToken)
+	if err != nil {
+		fmt.Printf("Error subscribing to redemption events with token %s: %s\n", userToken, err)
+	}
+	err = es.subscribeToPollEvents(userToken)
+	if err != nil {
+		fmt.Printf("Error subscribing to poll events with token %s: %s\n", userToken, err)
+	}
 }
 
 func (es *EventSub) InitForAllUsers() {
@@ -71,24 +81,70 @@ func (es *EventSub) InitForAllUsers() {
 			SELECT * FROM users
 		`
 	rows := utils.DoRequest(conn, sql)
-	users := []models.Users{}
+	var users []models.Users
 	for rows.Next() {
 		var user models.Users
-		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		rows.Scan(&user.UserId, &user.Username, &user.TwitchId, &user.Token, &user.TokenCreatedAt)
 		users = append(users, user)
 	}
 
 	for _, user := range users {
+		if user.Token == "" {
+			continue
+		}
+		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
 		es.DropAllSubscriptions(user.Token)
 		es.InitSubscriptions(user.Token)
 	}
 }
 
-func (es *EventSub) subscribeToMessageEvents(userToken string) {
+func (es *EventSub) subscribeToEvent(userToken string, request twitch.SubscriptionRequest) error {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+
+	httpClient := &http.Client{}
+	bytes, _ := json.Marshal(request)
+	req, err := http.NewRequest("POST", twitchUrl, strings.NewReader(string(bytes)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return err
+	}
+
+	subcriptionResponse := &twitch.SubscriptionResponse{}
+	err = json.Unmarshal(body, subcriptionResponse)
+	if err != nil {
+		fmt.Println("Error unmarshalling response:", err)
+		return err
+	}
+	if len(subcriptionResponse.Data) > 0 {
+		if !(subcriptionResponse.Data[0].Status == "enabled") {
+			return fmt.Errorf("subscription failed with status: %s\nResponse body : %s", subcriptionResponse.Data[0].Status, string(body))
+		} else {
+			return nil
+		}
+	} else {
+		return fmt.Errorf("subscription failed with no data.\nResponse body: %s", string(body))
+	}
+}
+
+func (es *EventSub) subscribeToMessageEvents(userToken string) error {
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	var data = twitch.SubscriptionRequest{
@@ -104,44 +160,17 @@ func (es *EventSub) subscribeToMessageEvents(userToken string) {
 		},
 	}
 
-	httpClient := &http.Client{}
-	bytes, _ := json.Marshal(data)
-	fmt.Println("Request body:", string(bytes))
-	req, err := http.NewRequest("POST", twitchUrl, strings.NewReader(string(bytes)))
+	err = es.subscribeToEvent(userToken, data)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	req.Header.Add("Authorization", "Bearer "+userToken)
-	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
-	req.Header.Add("Content-Type", "application/json")
-
-	res, err := httpClient.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return
-	}
-
-	subcriptionResponse := &twitch.SubscriptionResponse{}
-	err = json.Unmarshal(body, subcriptionResponse)
-	if err != nil {
-		fmt.Println("Error unmarshalling response:", err)
-		return
-	}
-	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
+	return nil
 }
 
-func (es *EventSub) subscribeToRedemptionEvents(userToken string) {
-	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+func (es *EventSub) subscribeToRedemptionEvents(userToken string) error {
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	var data = twitch.SubscriptionRequest{
@@ -156,44 +185,17 @@ func (es *EventSub) subscribeToRedemptionEvents(userToken string) {
 		},
 	}
 
-	httpClient := &http.Client{}
-	bytes, _ := json.Marshal(data)
-	fmt.Println("Request body:", string(bytes))
-	req, err := http.NewRequest("POST", twitchUrl, strings.NewReader(string(bytes)))
+	err = es.subscribeToEvent(userToken, data)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	req.Header.Add("Authorization", "Bearer "+userToken)
-	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
-	req.Header.Add("Content-Type", "application/json")
-
-	res, err := httpClient.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return
-	}
-
-	subcriptionResponse := &twitch.SubscriptionResponse{}
-	err = json.Unmarshal(body, subcriptionResponse)
-	if err != nil {
-		fmt.Println("Error unmarshalling response:", err)
-		return
-	}
-	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
+	return nil
 }
 
-func (es *EventSub) subscribeToPollEvents(userToken string) {
-	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+func (es *EventSub) subscribeToPollEvents(userToken string) error {
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	var data = twitch.SubscriptionRequest{
@@ -208,37 +210,11 @@ func (es *EventSub) subscribeToPollEvents(userToken string) {
 		},
 	}
 
-	httpClient := &http.Client{}
-	bytes, _ := json.Marshal(data)
-	fmt.Println("Request body:", string(bytes))
-	req, err := http.NewRequest("POST", twitchUrl, strings.NewReader(string(bytes)))
+	err = es.subscribeToEvent(userToken, data)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	req.Header.Add("Authorization", "Bearer "+userToken)
-	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
-	req.Header.Add("Content-Type", "application/json")
-
-	res, err := httpClient.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return
-	}
-
-	subcriptionResponse := &twitch.SubscriptionResponse{}
-	err = json.Unmarshal(body, subcriptionResponse)
-	if err != nil {
-		fmt.Println("Error unmarshalling response:", err)
-		return
-	}
-	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
+	return nil
 }
 
 func (es *EventSub) listenToMessages() {

@@ -36,6 +36,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSub *controllers.Eve
 	var user models.Users
 	if rows.Next() {
 		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		// TODO : refresh token if needed
 	} else {
 		sql = `
 				INSERT INTO users (twitch_id, username, token, token_created_at)
