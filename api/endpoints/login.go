@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func login(c *gin.Context, aw *controllers.ApiWrapper, eventSub *controllers.EventSub) {
+func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*controllers.EventSub) {
 	token := c.Query("access_token")
 
 	if token == "" {
@@ -46,7 +46,13 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSub *controllers.Eve
 		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName, token)
 		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
 
-		eventSub.InitSubscriptions(token)
+		es := controllers.GetEventSub(aw, user.Token)
+		es.OnStarted(func() {
+			es.DropAllSubscriptions(user.Token)
+			es.InitSubscriptions(user.Token)
+		})
+		es.Start()
+		eventSubs[user.Token] = es
 	}
 
 	c.Header("Set-Cookie", "token="+token+"; Path=/;")

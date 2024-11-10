@@ -22,17 +22,11 @@ func main() {
 	apiWrapper.SetClientId(os.Getenv("TWITCH_CLIENT_ID"))
 	apiWrapper.SetAppToken(appToken)
 
-	eventSub := controllers.GetEventSub(apiWrapper)
-	eventSub.OnStarted(func() {
-		fmt.Println("EventSub listener started")
-		eventSub.InitForAllUsers()
-		fmt.Println("EventSub subscriptions initialized")
-	})
-	eventSub.Start()
+	eventSubs := controllers.GetForAllUsers(apiWrapper)
+	fmt.Println("EventSubs initialized")
+	playersManager := controllers.DefaultPlayersManager(eventSubs, apiWrapper)
 
-	playersManager := controllers.DefaultPlayersManager(eventSub)
-
-	endpoints.MapRoutes(router, playersManager, apiWrapper, eventSub)
+	endpoints.MapRoutes(router, playersManager, apiWrapper, eventSubs)
 	apiPort := os.Getenv("API_PORT")
 
 	err := router.Run(fmt.Sprintf(":%s", apiPort))

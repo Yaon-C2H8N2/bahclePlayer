@@ -15,11 +15,11 @@ type PlayersManager struct {
 	mutex      *sync.Mutex
 	clients    map[string]*websocket.Conn
 	upgrader   websocket.Upgrader
-	eventSub   *EventSub
+	eventSubs  map[string]*EventSub
 	apiWrapper *ApiWrapper
 }
 
-func DefaultPlayersManager(eventSub *EventSub) *PlayersManager {
+func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrapper) *PlayersManager {
 	return &PlayersManager{
 		mutex:   &sync.Mutex{},
 		clients: make(map[string]*websocket.Conn),
@@ -28,8 +28,8 @@ func DefaultPlayersManager(eventSub *EventSub) *PlayersManager {
 				return true
 			},
 		},
-		eventSub:   eventSub,
-		apiWrapper: eventSub.apiWrapper,
+		eventSubs:  eventSubs,
+		apiWrapper: apiWrapper,
 	}
 }
 
@@ -62,7 +62,8 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token, conn)
 
-	unsubscribe := pm.eventSub.OnEvent(token, func(event twitch.NotificationMessage) {
+	eventSub := pm.eventSubs[token]
+	unsubscribe := eventSub.OnEvent(func(event twitch.NotificationMessage) {
 		eventBytes, _ := json.Marshal(event)
 		notifcationHandler.Handle(eventBytes)
 	})

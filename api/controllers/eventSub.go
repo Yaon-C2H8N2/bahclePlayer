@@ -16,15 +16,70 @@ import (
 )
 
 type EventSub struct {
-	onEvent    map[string]func(event twitch.NotificationMessage)
+	onEvent    func(event twitch.NotificationMessage)
 	onStarted  func()
 	sessionId  string
 	apiWrapper *ApiWrapper
+	user       models.Users
 }
 
-func GetEventSub(apiWrapper *ApiWrapper) *EventSub {
+func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
+	conn := utils.GetConnection()
+	defer conn.Close(context.Background())
+
+	sql := `
+			SELECT * FROM users
+		`
+	rows := utils.DoRequest(conn, sql)
+	var users []models.Users
+	for rows.Next() {
+		var user models.Users
+		rows.Scan(&user.UserId, &user.Username, &user.TwitchId, &user.Token, &user.TokenCreatedAt)
+		users = append(users, user)
+	}
+
+	eventSubs := make(map[string]*EventSub)
+
+	for _, user := range users {
+		if user.Token == "" {
+			continue
+		}
+		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
+		es := GetEventSub(apiWrapper, user.Token)
+		es.OnStarted(func() {
+			es.DropAllSubscriptions(user.Token)
+			es.InitSubscriptions(user.Token)
+		})
+		es.Start()
+		eventSubs[user.Token] = es
+	}
+
+	return eventSubs
+}
+
+func GetEventSub(apiWrapper *ApiWrapper, token string) *EventSub {
+	userInfo, err := apiWrapper.GetUserInfoFromToken(token)
+
+	if err != nil {
+		fmt.Println("Error getting user info from token:", err)
+		return nil
+	}
+
+	conn := utils.GetConnection()
+	defer conn.Close(context.Background())
+
+	sql := `
+			SELECT * FROM users
+			WHERE twitch_id = $1
+		`
+	rows := utils.DoRequest(conn, sql, userInfo.ID)
+	var user models.Users
+	if rows.Next() {
+		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+	}
+
 	var newEventSub = &EventSub{
-		onEvent: make(map[string]func(event twitch.NotificationMessage)),
+		user: user,
 	}
 
 	newEventSub.apiWrapper = apiWrapper
@@ -35,13 +90,11 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
-func (es *EventSub) OnEvent(token string, callback func(event twitch.NotificationMessage)) func() {
-	userId, _ := es.apiWrapper.GetUserInfoFromToken(token)
-
-	es.onEvent[userId.ID] = callback
+func (es *EventSub) OnEvent(callback func(event twitch.NotificationMessage)) func() {
+	es.onEvent = callback
 
 	return func() {
-		delete(es.onEvent, userId.ID)
+		es.onEvent = nil
 	}
 }
 
@@ -70,31 +123,6 @@ func (es *EventSub) InitSubscriptions(userToken string) {
 	err = es.subscribeToPollEvents(userToken)
 	if err != nil {
 		fmt.Printf("Error subscribing to poll events with token %s: %s\n", userToken, err)
-	}
-}
-
-func (es *EventSub) InitForAllUsers() {
-	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
-
-	sql := `
-			SELECT * FROM users
-		`
-	rows := utils.DoRequest(conn, sql)
-	var users []models.Users
-	for rows.Next() {
-		var user models.Users
-		rows.Scan(&user.UserId, &user.Username, &user.TwitchId, &user.Token, &user.TokenCreatedAt)
-		users = append(users, user)
-	}
-
-	for _, user := range users {
-		if user.Token == "" {
-			continue
-		}
-		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
-		es.DropAllSubscriptions(user.Token)
-		es.InitSubscriptions(user.Token)
 	}
 }
 
@@ -260,7 +288,7 @@ func (es *EventSub) listenToMessages() {
 					log.Printf("err: %s", messageBytes)
 					panic(err)
 				}
-				go es.onEvent[notificationMessage.Payload.Subscription.Condition.BroadcasterUserId](*notificationMessage)
+				go es.onEvent(*notificationMessage)
 				break
 			}
 		}

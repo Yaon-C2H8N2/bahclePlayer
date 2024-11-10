@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es *controllers.EventSub) {
+func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es map[string]*controllers.EventSub) {
 	router.GET("/login", func(c *gin.Context) {
 		login(c, aw, es)
 	})
