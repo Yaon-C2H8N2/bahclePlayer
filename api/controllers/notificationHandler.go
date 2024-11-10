@@ -63,7 +63,8 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	sql := `
 			SELECT config, value
 			FROM users_config
-			WHERE user_id = $1
+			JOIN users ON users_config.user_id = users.user_id
+			WHERE users.twitch_id = $1
 		`
 	rows := utils.DoRequest(conn, sql, redemptionEvent.BroadcasterUserId)
 	var config []struct{ Config, Value string }
