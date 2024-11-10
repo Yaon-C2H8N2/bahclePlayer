@@ -81,16 +81,27 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		return
 	}
 
-	found := false
+	var songRequest = songRequests.SongRequest{}
 	for _, c := range config {
-		if (c.Config == "PLAYLIST_REDEMPTION" || c.Config == "QUEUE_REDEMPTION") && c.Value == redemptionEvent.Reward.Id {
-			found = true
+		if c.Config == "PLAYLIST_REDEMPTION" && c.Value == redemptionEvent.Reward.Id {
+			songRequest.Type = "PLAYLIST"
+			break
+		}
+		if c.Config == "QUEUE_REDEMPTION" && c.Value == redemptionEvent.Reward.Id {
+			songRequest.Type = "QUEUE"
 			break
 		}
 	}
-	if !found {
+	if songRequest.Method == "" {
 		fmt.Println("Redemption reward not found in user config")
 		return
+	}
+
+	for _, c := range config {
+		if c.Config == (songRequest.Type + "_METHOD") {
+			songRequest.Method = c.Value
+			break
+		}
 	}
 
 	message := redemptionEvent.UserInput
@@ -117,7 +128,6 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	}
 	video := youtubeResults.Items[0]
 
-	var songRequest = songRequests.SongRequest{}
 	songRequest.TwitchRedemptionID = redemptionEvent.Id
 	songRequest.TwitchRewardID = redemptionEvent.Reward.Id
 	songRequest.YoutubeID = youtubeId
@@ -126,20 +136,32 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	songRequest.Duration = video.ContentDetails.Duration
 	songRequest.Thumbnail = video.Snippet.Thumbnails.Default.Url
 
-	//TODO : create settings for when to add the track to the playlist (immediately, after poll, ...)
-	pollTitle := fmt.Sprintf("Add the current track to playlist ?")
-	twitchPollId, err := nh.apiWrapper.CreatePoll(nh.token, redemptionEvent.BroadcasterUserId, pollTitle, []string{"Yes", "No"}, 60)
-	if err != nil || twitchPollId == "" {
-		if err != nil {
-			fmt.Printf("Failed to create poll : %s\n", err.Error())
-		} else {
-			fmt.Println("Failed to create poll : empty poll id")
+	if songRequest.Method == "POLL" {
+		pollTitle := fmt.Sprintf("Add the current track to playlist ?")
+		twitchPollId, err := nh.apiWrapper.CreatePoll(nh.token, redemptionEvent.BroadcasterUserId, pollTitle, []string{"Yes", "No"}, 60)
+		if err != nil || twitchPollId == "" {
+			if err != nil {
+				fmt.Printf("Failed to create poll : %s\n", err.Error())
+			} else {
+				fmt.Println("Failed to create poll : empty poll id")
+			}
+			err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
+			return
 		}
-		err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, redemptionEvent.Id, redemptionEvent.BroadcasterUserId, redemptionEvent.Reward.Id, "CANCELED")
-		return
+		songRequest.TwitchPollID = twitchPollId
+		nh.requestManager.AddRequest(songRequest)
+	} else if songRequest.Method == "DIRECT" {
+		newVideo, err := insertRequestInDatabase(songRequest, redemptionEvent.BroadcasterUserId)
+		if err != nil {
+			fmt.Println("Failed to insert video into database")
+			return
+		}
+		err = nh.conn.WriteJSON(newVideo)
+		if err != nil {
+			fmt.Println("Failed to send song request to player")
+			return
+		}
 	}
-	songRequest.TwitchPollID = twitchPollId
-	nh.requestManager.AddRequest(songRequest)
 }
 
 func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
@@ -155,7 +177,6 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	}
 	songRequest := nh.requestManager.GetRequest(pollEndEvent.Id)
 	if songRequest.TwitchPollID == "" {
-		fmt.Println("Failed to get song request from poll id")
 		return
 	}
 
@@ -172,69 +193,11 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	if maxChoice == "Yes" && maxVotes > 0 {
 		newStatus = "FULFILLED"
 
-		conn := utils.GetConnection()
-		defer conn.Close(context.Background())
-
-		sql := `
-			SELECT config, value
-			FROM users_config
-			WHERE user_id = $1
-		`
-		rows := utils.DoRequest(conn, sql, pollEndEvent.BroadcasterUserId)
-		var config []struct{ Config, Value string }
-		for rows.Next() {
-			var result struct{ Config, Value string }
-			err = rows.Scan(&result.Config, &result.Value)
-			if err != nil {
-				fmt.Println("Failed to get user config")
-				return
-			}
-			config = append(config, result)
-		}
-		if len(config) == 0 {
-			fmt.Println("Failed to get user config")
-			return
-		}
-
-		requestType := ""
-		for _, c := range config {
-			if (c.Config == "PLAYLIST_REDEMPTION" || c.Config == "QUEUE_REDEMPTION") && c.Value == songRequest.TwitchRewardID {
-				if c.Config == "PLAYLIST_REDEMPTION" {
-					requestType = "PLAYLIST"
-				} else {
-					requestType = "QUEUE"
-				}
-				break
-			}
-		}
-		if requestType == "" {
-			fmt.Println("Redemption reward not found in user config")
-			return
-		}
-
-		var newVideo = models.UsersVideos{}
-		sql = `
-				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-				RETURNING *;
-			`
-		rows = utils.DoRequest(
-			conn,
-			sql,
-			pollEndEvent.BroadcasterUserId,
-			songRequest.YoutubeID,
-			"https://www.youtube.com/watch?v="+songRequest.YoutubeID,
-			songRequest.Title,
-			songRequest.Duration,
-			requestType,
-			songRequest.Thumbnail,
-			"twitch", //TODO : get added_by from user
-		)
-		if !rows.Next() {
+		newVideo, err := insertRequestInDatabase(songRequest, pollEndEvent.BroadcasterUserId)
+		if err != nil {
 			fmt.Println("Failed to insert video into database")
 			return
 		}
-		rows.Scan(&newVideo.VideoId, &newVideo.UserId, &newVideo.YoutubeId, &newVideo.Url, &newVideo.Title, &newVideo.Duration, &newVideo.Type, &newVideo.CreatedAt, &newVideo.ThumbnailUrl, &newVideo.AddedBy)
 
 		err = nh.conn.WriteJSON(newVideo)
 		if err != nil {
@@ -247,4 +210,33 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 		fmt.Println("Failed to update redemption status")
 		return
 	}
+}
+
+func insertRequestInDatabase(songRequest songRequests.SongRequest, broadcasterUserId string) (models.UsersVideos, error) {
+	conn := utils.GetConnection()
+	defer conn.Close(context.Background())
+
+	var newVideo = models.UsersVideos{}
+	sql := `
+				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				RETURNING *;
+			`
+	rows := utils.DoRequest(
+		conn,
+		sql,
+		broadcasterUserId,
+		songRequest.YoutubeID,
+		"https://www.youtube.com/watch?v="+songRequest.YoutubeID,
+		songRequest.Title,
+		songRequest.Duration,
+		songRequest.Type,
+		songRequest.Thumbnail,
+		"twitch", //TODO : get added_by from user
+	)
+	if !rows.Next() {
+		return newVideo, fmt.Errorf("Failed to insert video into database")
+	}
+	rows.Scan(&newVideo.VideoId, &newVideo.UserId, &newVideo.YoutubeId, &newVideo.Url, &newVideo.Title, &newVideo.Duration, &newVideo.Type, &newVideo.CreatedAt, &newVideo.ThumbnailUrl, &newVideo.AddedBy)
+	return newVideo, nil
 }

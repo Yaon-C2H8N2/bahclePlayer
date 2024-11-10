@@ -9,4 +9,7 @@ type SongRequest struct {
 	Channel            string `json:"channel"`
 	Duration           string `json:"duration"`
 	Thumbnail          string `json:"thumbnail"`
+	Type               string `json:"type"`
+	Method             string `json:"method"`
+	AddedBy            string `json:"added_by"`
 }
