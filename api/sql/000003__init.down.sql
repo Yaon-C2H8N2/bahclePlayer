@@ -1,0 +1,3 @@
+ALTER TABLE users DROP COLUMN IF EXISTS token;
+
+ALTER TABLE users DROP COLUMN IF EXISTS token_created_at;

@@ -6,13 +6,9 @@ import (
 	"os"
 )
 
-func MapRoutes(router *gin.Engine) {
-	pm := controllers.DefaultPlayersManager()
-	aw := controllers.GetApiWrapper()
-	aw.SetClientId(os.Getenv("TWITCH_CLIENT_ID"))
-
+func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es *controllers.EventSub) {
 	router.GET("/login", func(c *gin.Context) {
-		login(c, aw)
+		login(c, aw, es)
 	})
 	router.GET("/logout", func(c *gin.Context) {
 		logout(c)

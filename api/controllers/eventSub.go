@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
 	"github.com/gorilla/websocket"
 	"io"
 	"log"
@@ -32,10 +35,14 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
-func (es *EventSub) OnEvent(token string, callback func(event twitch.NotificationMessage)) {
+func (es *EventSub) OnEvent(token string, callback func(event twitch.NotificationMessage)) func() {
 	userId, _ := es.apiWrapper.GetUserInfoFromToken(token)
 
 	es.onEvent[userId.ID] = callback
+
+	return func() {
+		delete(es.onEvent, userId.ID)
+	}
 }
 
 func (es *EventSub) OnStarted(callback func()) {
@@ -50,7 +57,34 @@ func (es *EventSub) DropAllSubscriptions(userToken string) {
 	//TODO: Implement
 }
 
-func (es *EventSub) SubscribeToMessageEvents(userToken string) {
+func (es *EventSub) InitSubscriptions(userToken string) {
+	es.subscribeToMessageEvents(userToken)
+	es.subscribeToRedemptionEvents(userToken)
+	es.subscribeToPollEvents(userToken)
+}
+
+func (es *EventSub) InitForAllUsers() {
+	conn := utils.GetConnection()
+	defer conn.Close(context.Background())
+
+	sql := `
+			SELECT * FROM users
+		`
+	rows := utils.DoRequest(conn, sql)
+	users := []models.Users{}
+	for rows.Next() {
+		var user models.Users
+		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		users = append(users, user)
+	}
+
+	for _, user := range users {
+		es.DropAllSubscriptions(user.Token)
+		es.InitSubscriptions(user.Token)
+	}
+}
+
+func (es *EventSub) subscribeToMessageEvents(userToken string) {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
@@ -103,7 +137,7 @@ func (es *EventSub) SubscribeToMessageEvents(userToken string) {
 	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
 }
 
-func (es *EventSub) SubscribeToRedemptionEvents(userToken string) {
+func (es *EventSub) subscribeToRedemptionEvents(userToken string) {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
@@ -155,7 +189,7 @@ func (es *EventSub) SubscribeToRedemptionEvents(userToken string) {
 	fmt.Println("Total subscriptions count:", subcriptionResponse.Total)
 }
 
-func (es *EventSub) SubscribeToPollEvents(userToken string) {
+func (es *EventSub) subscribeToPollEvents(userToken string) {
 	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
 	if err != nil {
