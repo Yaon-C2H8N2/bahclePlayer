@@ -288,7 +288,9 @@ func (es *EventSub) listenToMessages() {
 					log.Printf("err: %s", messageBytes)
 					panic(err)
 				}
-				go es.onEvent(*notificationMessage)
+				if es.onEvent != nil {
+					go es.onEvent(*notificationMessage)
+				}
 				break
 			}
 		}
