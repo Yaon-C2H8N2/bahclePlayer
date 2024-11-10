@@ -99,7 +99,7 @@ func deleteVideo(c *gin.Context, aw *controllers.ApiWrapper) {
 
 	sql := `
 			DELETE FROM users_videos
-			WHERE user_id = $1 AND video_id = $2
+			WHERE user_id = (SELECT user_id FROM users WHERE twitch_id = $1) AND video_id = $2
 		`
 	utils.DoRequest(conn, sql, userInfo.ID, videoID)
 

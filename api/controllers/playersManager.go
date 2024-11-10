@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 )
@@ -16,19 +15,11 @@ type PlayersManager struct {
 	mutex      *sync.Mutex
 	clients    map[string]*websocket.Conn
 	upgrader   websocket.Upgrader
-	eventSub   *EventSub
+	eventSubs  map[string]*EventSub
 	apiWrapper *ApiWrapper
 }
 
-func DefaultPlayersManager() *PlayersManager {
-	apiWrapper := GetApiWrapper()
-	appToken, err := RequestAppToken(os.Getenv("TWITCH_CLIENT_ID"), os.Getenv("TWITCH_CLIENT_SECRET"))
-	if err != nil {
-		panic(err)
-	}
-	apiWrapper.SetAppToken(appToken)
-	apiWrapper.SetClientId(os.Getenv("TWITCH_CLIENT_ID"))
-
+func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrapper) *PlayersManager {
 	return &PlayersManager{
 		mutex:   &sync.Mutex{},
 		clients: make(map[string]*websocket.Conn),
@@ -37,7 +28,7 @@ func DefaultPlayersManager() *PlayersManager {
 				return true
 			},
 		},
-		eventSub:   GetEventSub(apiWrapper),
+		eventSubs:  eventSubs,
 		apiWrapper: apiWrapper,
 	}
 }
@@ -71,35 +62,22 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token, conn)
 
-	pm.eventSub.OnEvent(token, func(event twitch.NotificationMessage) {
+	eventSub := pm.eventSubs[token]
+	unsubscribe := eventSub.OnEvent(func(event twitch.NotificationMessage) {
 		eventBytes, _ := json.Marshal(event)
 		notifcationHandler.Handle(eventBytes)
 	})
-
-	if pm.eventSub.IsStarted() {
-		pm.eventSub.SubscribeToMessageEvents(token)
-		pm.eventSub.SubscribeToRedemptionEvents(token)
-		pm.eventSub.SubscribeToPollEvents(token)
-	} else {
-		pm.eventSub.OnStarted(func() {
-			pm.eventSub.SubscribeToMessageEvents(token)
-			pm.eventSub.SubscribeToRedemptionEvents(token)
-			pm.eventSub.SubscribeToPollEvents(token)
-		})
-		pm.eventSub.Start()
-	}
 
 	for {
 		err := conn.WriteMessage(websocket.PingMessage, nil)
 		if err != nil {
 			fmt.Println("Client disconnected")
+			unsubscribe()
 			conn.Close()
 
 			pm.mutex.Lock()
 			delete(pm.clients, token)
 			pm.mutex.Unlock()
-
-			pm.eventSub.DropAllSubscriptions(token)
 
 			break
 		}

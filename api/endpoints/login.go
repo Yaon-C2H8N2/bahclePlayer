@@ -3,11 +3,12 @@ package endpoints
 import (
 	"context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
 	"github.com/gin-gonic/gin"
 )
 
-func login(c *gin.Context, aw *controllers.ApiWrapper) {
+func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*controllers.EventSub) {
 	token := c.Query("access_token")
 
 	if token == "" {
@@ -32,17 +33,26 @@ func login(c *gin.Context, aw *controllers.ApiWrapper) {
 			WHERE twitch_id = $1
 		`
 	rows := utils.DoRequest(conn, sql, userInfo.ID)
-	var user any
+	var user models.Users
 	if rows.Next() {
-		rows.Scan(&user)
+		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		// TODO : refresh token if needed
 	} else {
 		sql = `
-				INSERT INTO users (twitch_id, username)
-				VALUES ($1, $2)
+				INSERT INTO users (twitch_id, username, token, token_created_at)
+				VALUES ($1, $2, $3, now())
 				RETURNING *
 			`
-		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName)
-		rows.Scan(&user)
+		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName, token)
+		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+
+		es := controllers.GetEventSub(aw, user.Token)
+		es.OnStarted(func() {
+			es.DropAllSubscriptions(user.Token)
+			es.InitSubscriptions(user.Token)
+		})
+		es.Start()
+		eventSubs[user.Token] = es
 	}
 
 	c.Header("Set-Cookie", "token="+token+"; Path=/;")
