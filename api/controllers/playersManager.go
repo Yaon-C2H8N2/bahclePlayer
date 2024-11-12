@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -71,7 +70,6 @@ func (pm *PlayersManager) mainLoop(token string) {
 	for {
 		err := conn.WriteMessage(websocket.PingMessage, nil)
 		if err != nil {
-			fmt.Println("Client disconnected")
 			unsubscribe()
 			conn.Close()
 

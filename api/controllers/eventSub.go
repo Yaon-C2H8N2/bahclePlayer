@@ -250,23 +250,24 @@ func (es *EventSub) listenToMessages() {
 	conn, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 
 	if err != nil {
-		panic(err)
+		log.Printf("eventSub[%s] couldn't dial twitch websocket: %s", es.user.Username, err)
 	}
 
 	go func() {
 		defer conn.Close()
+	loopiloop:
 		for {
 			_, messageBytes, err := conn.ReadMessage()
 			if err != nil {
-				log.Printf("err: %s", messageBytes)
-				panic(err)
+				log.Printf("eventSub[%s] couldn't read message: %s", es.user.Username, messageBytes)
+				break loopiloop
 			}
 
 			var message = &twitch.BaseMessage{}
 			err = json.Unmarshal(messageBytes, message)
 			if err != nil {
-				log.Printf("err: %s", messageBytes)
-				panic(err)
+				log.Printf("eventSub[%s] error unmarshalling base message: %s", es.user.Username, messageBytes)
+				break loopiloop
 			}
 
 			switch message.Metadata.MessageType {
@@ -274,8 +275,8 @@ func (es *EventSub) listenToMessages() {
 				var welcomeMessage = &twitch.WelcomeMessage{}
 				err = json.Unmarshal(messageBytes, welcomeMessage)
 				if err != nil {
-					log.Printf("err: %s", messageBytes)
-					panic(err)
+					log.Printf("eventSub[%s] error unmarshalling welcome message: %s", es.user.Username, messageBytes)
+					break loopiloop
 				}
 
 				es.sessionId = welcomeMessage.Payload.Session.Id
@@ -285,8 +286,8 @@ func (es *EventSub) listenToMessages() {
 				var notificationMessage = &twitch.NotificationMessage{}
 				err = json.Unmarshal(messageBytes, notificationMessage)
 				if err != nil {
-					log.Printf("err: %s", messageBytes)
-					panic(err)
+					log.Printf("eventSub[%s] error unmarshalling notification message: %s", es.user.Username, messageBytes)
+					break loopiloop
 				}
 				if es.onEvent != nil {
 					go es.onEvent(*notificationMessage)
@@ -295,5 +296,5 @@ func (es *EventSub) listenToMessages() {
 			}
 		}
 	}()
-	fmt.Println("Listening to messages")
+	//TODO : implement auto restart on disconnect
 }
