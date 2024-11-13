@@ -62,15 +62,27 @@ func (pm *PlayersManager) mainLoop(token string) {
 	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token, conn)
 
 	eventSub := pm.eventSubs[token]
-	unsubscribe := eventSub.OnEvent(func(event twitch.NotificationMessage) {
+	unsubscribeEvent := eventSub.OnEvent(func(event twitch.NotificationMessage) {
 		eventBytes, _ := json.Marshal(event)
 		notifcationHandler.Handle(eventBytes)
+	})
+	unsubscribeError := eventSub.OnError(func(eventSubError error) {
+		payload := struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}{
+			Error:   eventSubError.Error(),
+			Message: "An error occured with Twitch event listener",
+		}
+
+		conn.WriteJSON(payload)
 	})
 
 	for {
 		err := conn.WriteMessage(websocket.PingMessage, nil)
 		if err != nil {
-			unsubscribe()
+			unsubscribeEvent()
+			unsubscribeError()
 			conn.Close()
 
 			pm.mutex.Lock()

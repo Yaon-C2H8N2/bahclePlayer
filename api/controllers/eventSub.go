@@ -18,6 +18,7 @@ import (
 type EventSub struct {
 	onEvent    func(event twitch.NotificationMessage)
 	onStarted  func()
+	onError    func(error error)
 	sessionId  string
 	apiWrapper *ApiWrapper
 	user       models.Users
@@ -98,8 +99,20 @@ func (es *EventSub) OnEvent(callback func(event twitch.NotificationMessage)) fun
 	}
 }
 
-func (es *EventSub) OnStarted(callback func()) {
+func (es *EventSub) OnError(callback func(err error)) func() {
+	es.onError = callback
+
+	return func() {
+		es.onError = nil
+	}
+}
+
+func (es *EventSub) OnStarted(callback func()) func() {
 	es.onStarted = callback
+
+	return func() {
+		es.onStarted = nil
+	}
 }
 
 func (es *EventSub) IsStarted() bool {
@@ -250,7 +263,11 @@ func (es *EventSub) listenToMessages() {
 	conn, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 
 	if err != nil {
-		log.Printf("eventSub[%s] couldn't dial twitch websocket: %s", es.user.Username, err)
+		errMsg := fmt.Sprintf("eventSub[%s] couldn't dial twitch websocket: %s", es.user.Username, err)
+		log.Println(errMsg)
+		if es.onError != nil {
+			go es.onError(fmt.Errorf(errMsg))
+		}
 	}
 
 	go func() {
@@ -259,14 +276,22 @@ func (es *EventSub) listenToMessages() {
 		for {
 			_, messageBytes, err := conn.ReadMessage()
 			if err != nil {
-				log.Printf("eventSub[%s] couldn't read message: %s", es.user.Username, messageBytes)
+				errMsg := fmt.Sprintf("eventSub[%s] couldn't read message: %s", es.user.Username, messageBytes)
+				log.Println(errMsg)
+				if es.onError != nil {
+					go es.onError(fmt.Errorf(errMsg))
+				}
 				break loopiloop
 			}
 
 			var message = &twitch.BaseMessage{}
 			err = json.Unmarshal(messageBytes, message)
 			if err != nil {
-				log.Printf("eventSub[%s] error unmarshalling base message: %s", es.user.Username, messageBytes)
+				errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling base message: %s", es.user.Username, messageBytes)
+				log.Println(errMsg)
+				if es.onError != nil {
+					go es.onError(fmt.Errorf(errMsg))
+				}
 				break loopiloop
 			}
 
@@ -275,7 +300,11 @@ func (es *EventSub) listenToMessages() {
 				var welcomeMessage = &twitch.WelcomeMessage{}
 				err = json.Unmarshal(messageBytes, welcomeMessage)
 				if err != nil {
-					log.Printf("eventSub[%s] error unmarshalling welcome message: %s", es.user.Username, messageBytes)
+					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling welcome message: %s", es.user.Username, messageBytes)
+					log.Println(errMsg)
+					if es.onError != nil {
+						go es.onError(fmt.Errorf(errMsg))
+					}
 					break loopiloop
 				}
 
@@ -286,7 +315,11 @@ func (es *EventSub) listenToMessages() {
 				var notificationMessage = &twitch.NotificationMessage{}
 				err = json.Unmarshal(messageBytes, notificationMessage)
 				if err != nil {
-					log.Printf("eventSub[%s] error unmarshalling notification message: %s", es.user.Username, messageBytes)
+					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling notification message: %s", es.user.Username, messageBytes)
+					log.Println(errMsg)
+					if es.onError != nil {
+						go es.onError(fmt.Errorf(errMsg))
+					}
 					break loopiloop
 				}
 				if es.onEvent != nil {
@@ -296,5 +329,4 @@ func (es *EventSub) listenToMessages() {
 			}
 		}
 	}()
-	//TODO : implement auto restart on disconnect
 }

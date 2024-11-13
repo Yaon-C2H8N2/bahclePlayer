@@ -37,6 +37,16 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 	if rows.Next() {
 		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
 		// TODO : refresh token if needed
+
+		if eventSubs[user.Token] == nil {
+			es := controllers.GetEventSub(aw, user.Token)
+			es.OnStarted(func() {
+				es.DropAllSubscriptions(user.Token)
+				es.InitSubscriptions(user.Token)
+			})
+			es.Start()
+			eventSubs[user.Token] = es
+		}
 	} else {
 		sql = `
 				INSERT INTO users (twitch_id, username, token, token_created_at)

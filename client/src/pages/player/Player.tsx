@@ -4,6 +4,7 @@ import {fetchApi} from "@/lib/network.ts";
 import {Playlist} from "./components/Playlist.tsx";
 import ReactPlayer from "react-player";
 import {SkipForward} from "lucide-react";
+import {useToast} from "@/hooks/use-toast.ts";
 
 
 export const Player = () => {
@@ -12,6 +13,7 @@ export const Player = () => {
     const [queue, setQueue] = useState<any>([])
     const [currentVideo, setCurrentVideo] = useState<any>(null)
     const [playlistIndex, setPlaylistIndex] = useState<number>(-1)
+    const toast = useToast()
 
     const formatISODuration = (duration: string) => {
         const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
@@ -38,13 +40,25 @@ export const Player = () => {
 
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data)
+                    if(data.error){
+                        toast.toast({
+                            title: "Error",
+                            description: data.error,
+                            variant: "destructive",
+                        })
+                        return
+                    }
+
                     if(data.type === "QUEUE"){
                         setQueue([...queue, data])
                     } else if(data.type === "PLAYLIST"){
                         setPlaylist([...playlist, data])
                     }
-
-                    //TODO : toaster success
+                    toast.toast({
+                        title: `A video as been added to the ${data.type === "QUEUE " ? "queue" : "playlist"}`,
+                        description: data.title,
+                        duration: 5000
+                    })
                 }
 
                 return ws;
@@ -84,7 +98,7 @@ export const Player = () => {
         if(currentVideo.type === "QUEUE") {
             const newQueue = queue.filter((video: any) => video.video_id !== currentVideo.video_id)
             setQueue(newQueue)
-            removeVideo(currentVideo)
+            removeVideo(currentVideo, true)
             if(newQueue.length > 0){
                 setCurrentVideo(newQueue[0])
             } else {
@@ -97,14 +111,18 @@ export const Player = () => {
         }
     }
 
-    const removeVideo = (video: any) => {
+    const removeVideo = (video: any, auto: boolean) => {
         fetchApi("/api/playlist", {method: "DELETE", body: JSON.stringify({video_id: video.video_id})})
             .then((res) => {
                 return res.json()
             }
         ).then((data) => {
-            if(data.status === "success"){
-                //TODO : toaster success
+            if(data.status === "success" && !auto){
+                toast.toast({
+                    title: "Video removed",
+                    description: `${video.title} as been removed from the playlist/queue`,
+                    duration: 5000
+                })
             }
         })
     }
@@ -143,7 +161,7 @@ export const Player = () => {
                     </div>
                 </div>
                 <div className={"w-1/3 max-h-[80vh] min-h-[80vh] overflow-y-auto"}>
-                    <Playlist playlist={playlist} queue={queue} currentlyPlaying={currentVideo} onRemoveVideo={(video) => removeVideo(video.video_id)}/>
+                    <Playlist playlist={playlist} queue={queue} currentlyPlaying={currentVideo} onRemoveVideo={(video) => removeVideo(video, false)}/>
                 </div>
             </div>
         </div>
