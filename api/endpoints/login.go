@@ -9,8 +9,8 @@ import (
 )
 
 func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*controllers.EventSub) {
-	token := c.Query("access_token")
-
+	token := c.Request.Header.Get("Authorization")
+	token = token[7:]
 	if token == "" {
 		c.JSON(400, gin.H{
 			"error": "missing access_token",

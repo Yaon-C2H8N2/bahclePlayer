@@ -7,11 +7,6 @@ export const Home = () => {
     const [loading, setLoading] = useState(false)
     const [appInfo, setAppInfo] = useState<any>(null)
 
-    const handleLogin = async (token: string) => {
-        const response = await fetchApi(`/api/login?access_token=${token}`)
-        return response.json()
-    }
-
     useEffect(() => {
         setLoading(true)
         fetchApi("/api/appinfo").then((res) => {
@@ -22,26 +17,33 @@ export const Home = () => {
         })
 
         if (document.cookie.includes("token")) {
-            const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
-            handleLogin(token ?? "").then((response) => {
-                if (response.error) {
-                    throw new Error(response.error)
-                } else {
-                    window.location.href = "/player"
-                }
-            })
+            fetchApi(`/api/login`)
+                .then((response) => response.json())
+                .then((response) => {
+                    if (response.error) {
+                        throw new Error(response.error)
+                    } else {
+                        window.location.href = "/player"
+                    }
+                })
         } else {
             const fragments = document.location.hash.split("&")[0].split("=")
             fragments.forEach((fragment, index) => {
                 if (fragment === "#access_token") {
                     setLoading(true)
-                    handleLogin(fragments[index + 1]).then((response) => {
-                        if (response.error) {
-                            throw new Error(response.error)
-                        } else {
-                            window.location.href = "/player"
+                    fetch(`/api/login`, {
+                        headers: {
+                            "Authorization": `Bearer ${fragment[index + 1]}`
                         }
                     })
+                        .then((response) => response.json())
+                        .then((response) => {
+                            if (response.error) {
+                                throw new Error(response.error)
+                            } else {
+                                window.location.href = "/player"
+                            }
+                        })
                 }
             })
         }
