@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/endpoints"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
 	"os"
 )
@@ -26,9 +27,15 @@ func main() {
 	fmt.Println("EventSubs initialized")
 	playersManager := controllers.DefaultPlayersManager(eventSubs, apiWrapper)
 
-	endpoints.MapRoutes(router, playersManager, apiWrapper, eventSubs)
+	appStatus := models.AppStatus{
+		TwitchClientId: os.Getenv("TWITCH_CLIENT_ID"),
+		AppUrl:         os.Getenv("APP_URL"),
+		Started:        false,
+	}
+	endpoints.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
 	apiPort := os.Getenv("API_PORT")
 
+	appStatus.Started = true
 	err := router.Run(fmt.Sprintf(":%s", apiPort))
 	if err != nil {
 		panic(err)

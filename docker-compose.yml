@@ -6,7 +6,12 @@ services:
     ports:
       - "8081:${API_PORT}"
     depends_on:
-      - database
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl", "localhost:${API_PORT}/appinfo"]
+      interval: 10s
+      retries: 3
     env_file:
       - .env
 
@@ -17,12 +22,17 @@ services:
     ports:
       - "3000:${WEB_PORT}"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     env_file:
       - .env
 
   database:
     image: postgres:${POSTGRES_VERSION}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB}", "-U", "${POSTGRES_USER}"]
+      interval: 10s
+      retries: 3
     ports:
       - "5432:${POSTGRES_PORT}"
     env_file:

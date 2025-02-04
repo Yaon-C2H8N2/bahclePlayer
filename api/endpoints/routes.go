@@ -2,11 +2,11 @@ package endpoints
 
 import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
+	"github.com/Yaon-C2H8N2/bahclePlayer/models"
 	"github.com/gin-gonic/gin"
-	"os"
 )
 
-func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es map[string]*controllers.EventSub) {
+func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es map[string]*controllers.EventSub, status *models.AppStatus) {
 	router.GET("/login", func(c *gin.Context) {
 		login(c, aw, es)
 	})
@@ -29,9 +29,6 @@ func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controlle
 		getRewardsIds(c, aw)
 	})
 	router.GET("/appinfo", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"TWITCH_CLIENT_ID": os.Getenv("TWITCH_CLIENT_ID"),
-			"APP_URL":          os.Getenv("APP_URL"),
-		})
+		c.JSON(200, status)
 	})
 }

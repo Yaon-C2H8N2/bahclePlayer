@@ -14,6 +14,8 @@ RUN go build -o /app/build/api
 
 FROM alpine:${ALPINE_VERSION}
 
+RUN apk add curl
+
 WORKDIR /app
 
 COPY --from=builder /app/sql/ /app/sql/
