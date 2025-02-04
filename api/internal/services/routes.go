@@ -1,8 +1,8 @@
-package endpoints
+package services
 
 import (
-	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
-	"github.com/Yaon-C2H8N2/bahclePlayer/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/gin-gonic/gin"
 )
 

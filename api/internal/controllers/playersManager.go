@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
-	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"

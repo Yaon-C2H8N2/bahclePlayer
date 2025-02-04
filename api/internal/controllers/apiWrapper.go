@@ -3,7 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"io"
 	"net/http"
 	"strings"

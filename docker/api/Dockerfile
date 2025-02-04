@@ -10,7 +10,7 @@ COPY api/go.mod api/go.sum ./
 RUN go mod download
 
 COPY api/ .
-RUN go build -o /app/build/api
+RUN go build -o /app/build/api ./cmd
 
 FROM alpine:${ALPINE_VERSION}
 

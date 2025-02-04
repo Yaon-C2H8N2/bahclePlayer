@@ -1,11 +1,11 @@
-package endpoints
+package services
 
 import (
 	"context"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
-	"github.com/Yaon-C2H8N2/bahclePlayer/models/twitch"
-	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 

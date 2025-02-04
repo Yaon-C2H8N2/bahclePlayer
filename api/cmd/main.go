@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/controllers"
-	"github.com/Yaon-C2H8N2/bahclePlayer/endpoints"
-	"github.com/Yaon-C2H8N2/bahclePlayer/models"
-	"github.com/Yaon-C2H8N2/bahclePlayer/utils"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/services"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"os"
 )
 import "github.com/gin-gonic/gin"
@@ -32,7 +32,7 @@ func main() {
 		AppUrl:         os.Getenv("APP_URL"),
 		Started:        false,
 	}
-	endpoints.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
+	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
 	apiPort := os.Getenv("API_PORT")
 
 	appStatus.Started = true
