@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
@@ -43,7 +42,7 @@ func getRewardsIds(c *gin.Context, aw *controllers.ApiWrapper) {
 
 func getSettings(user twitch.UserInfo) []struct{ Config, Value string } {
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 			SELECT config, value
@@ -97,7 +96,7 @@ func saveSettings(c *gin.Context, aw *controllers.ApiWrapper) {
 	}
 
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 		INSERT INTO users_config (user_id, config, value)

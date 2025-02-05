@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
@@ -26,7 +25,7 @@ type EventSub struct {
 
 func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 			SELECT * FROM users
@@ -67,7 +66,7 @@ func GetEventSub(apiWrapper *ApiWrapper, token string) *EventSub {
 	}
 
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 			SELECT * FROM users

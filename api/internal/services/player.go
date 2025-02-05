@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
@@ -31,7 +30,7 @@ func getPlaylistAndQueue(c *gin.Context, aw *controllers.ApiWrapper) {
 	}
 
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 			SELECT users_videos.*
@@ -87,7 +86,7 @@ func deleteVideo(c *gin.Context, aw *controllers.ApiWrapper) {
 	}
 
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 			DELETE FROM users_videos

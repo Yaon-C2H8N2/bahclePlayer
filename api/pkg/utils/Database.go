@@ -8,11 +8,14 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"os"
 )
 
-func GetConnection() *pgx.Conn {
+var Database *pgxpool.Pool
+
+func InitDatabase() {
 	connectionString := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s",
 		os.Getenv("POSTGRES_USER"),
@@ -22,7 +25,17 @@ func GetConnection() *pgx.Conn {
 		os.Getenv("POSTGRES_DB"),
 	)
 
-	conn, err := pgx.Connect(context.Background(), connectionString)
+	pool, err := pgxpool.New(context.Background(), connectionString)
+	if err != nil {
+		panic(err)
+	}
+
+	Database = pool
+}
+
+func GetConnection() *pgxpool.Conn {
+	conn, err := Database.Acquire(context.Background())
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 	}
@@ -30,7 +43,7 @@ func GetConnection() *pgx.Conn {
 	return conn
 }
 
-func DoRequest(conn *pgx.Conn, query string, args ...any) pgx.Rows {
+func DoRequest(conn *pgxpool.Conn, query string, args ...any) pgx.Rows {
 	rows, err := conn.Query(context.Background(), query, args...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query failed: %v\n", err)

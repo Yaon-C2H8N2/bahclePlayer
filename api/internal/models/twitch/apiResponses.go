@@ -44,6 +44,11 @@ type TokenResponse struct {
 	TokenType   string `json:"token_type"`
 }
 
+type UserTokenResponse struct {
+	TokenResponse
+	RefreshToken string `json:"refresh_token"`
+}
+
 type PollCreateResponse struct {
 	Data []struct {
 		Id               string `json:"id"`

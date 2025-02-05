@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
@@ -58,7 +57,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 	}
 
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	sql := `
 			SELECT config, value
@@ -215,7 +214,7 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 
 func insertRequestInDatabase(songRequest songRequests.SongRequest, broadcasterUserId string) (models.UsersVideos, error) {
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
+	defer conn.Release()
 
 	var newVideo = models.UsersVideos{}
 	sql := `

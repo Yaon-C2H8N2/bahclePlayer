@@ -7,7 +7,7 @@ import (
 )
 
 func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es map[string]*controllers.EventSub, status *models.AppStatus) {
-	router.GET("/login", func(c *gin.Context) {
+	router.POST("/login", func(c *gin.Context) {
 		login(c, aw, es)
 	})
 	router.GET("/logout", func(c *gin.Context) {

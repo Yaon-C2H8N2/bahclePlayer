@@ -12,10 +12,17 @@ import "github.com/gin-gonic/gin"
 
 func main() {
 	utils.Migrate()
+	utils.InitDatabase()
 
 	router := gin.Default()
 
-	appToken, appTokenErr := controllers.RequestAppToken(os.Getenv("TWITCH_CLIENT_ID"), os.Getenv("TWITCH_CLIENT_SECRET"))
+	appStatus := models.AppStatus{
+		TwitchClientId: os.Getenv("TWITCH_CLIENT_ID"),
+		AppUrl:         os.Getenv("APP_URL"),
+		Started:        false,
+	}
+
+	appToken, appTokenErr := controllers.RequestAppToken(appStatus.AppUrl, os.Getenv("TWITCH_CLIENT_SECRET"))
 	if appTokenErr != nil {
 		panic(appTokenErr)
 	}
@@ -27,11 +34,6 @@ func main() {
 	fmt.Println("EventSubs initialized")
 	playersManager := controllers.DefaultPlayersManager(eventSubs, apiWrapper)
 
-	appStatus := models.AppStatus{
-		TwitchClientId: os.Getenv("TWITCH_CLIENT_ID"),
-		AppUrl:         os.Getenv("APP_URL"),
-		Started:        false,
-	}
 	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
 	apiPort := os.Getenv("API_PORT")
 

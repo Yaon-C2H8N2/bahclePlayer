@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
@@ -9,52 +8,73 @@ import (
 )
 
 func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*controllers.EventSub) {
-	token := c.Request.Header.Get("Authorization")
-	token = token[7:]
-	if token == "" {
-		c.JSON(400, gin.H{
-			"error": "missing access_token",
-		})
-	}
+	loginRequest := models.LoginRequest{}
+	err := c.BindJSON(&loginRequest)
 
-	userInfo, err := aw.GetUserInfoFromToken(token)
 	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
+		c.JSON(400, gin.H{
+			"error": "Failed to bind login request",
 		})
 		return
 	}
 
 	conn := utils.GetConnection()
-	defer conn.Close(context.Background())
-
 	sql := `
-			SELECT * FROM users
-			WHERE twitch_id = $1
+			INSERT INTO token_requests (code, requested_at)
+			VALUES ($1, now())
+			ON CONFLICT (code) DO NOTHING
+			RETURNING code
 		`
-	rows := utils.DoRequest(conn, sql, userInfo.ID)
+	rows := utils.DoRequest(conn, sql, loginRequest.Code)
 	var user models.Users
-	if rows.Next() {
-		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
-		// TODO : refresh token if needed
-
-		if eventSubs[user.Token] == nil {
-			es := controllers.GetEventSub(aw, user.Token)
-			es.OnStarted(func() {
-				es.DropAllSubscriptions(user.Token)
-				es.InitSubscriptions(user.Token)
-			})
-			es.Start()
-			eventSubs[user.Token] = es
-		}
+	if !rows.Next() {
+		c.JSON(401, gin.H{
+			"error": "A token request with this code already exists",
+		})
+		return
 	} else {
+		userToken, err := controllers.RequestUserToken(loginRequest.Code)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		conn.Release()
+		conn := utils.GetConnection()
+		sql = `
+			DELETE FROM token_requests
+			WHERE code = $1
+		`
+		utils.DoRequest(conn, sql, loginRequest.Code)
+
+		userInfo, err := aw.GetUserInfoFromToken(userToken)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		conn.Release()
+		conn = utils.GetConnection()
+		defer conn.Release()
 		sql = `
 				INSERT INTO users (twitch_id, username, token, token_created_at)
 				VALUES ($1, $2, $3, now())
-				RETURNING *
+				ON CONFLICT (twitch_id) DO UPDATE SET token = $3, token_created_at = now()
+				RETURNING twitch_id, username, token, token_created_at
 			`
-		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName, token)
-		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName, userToken)
+		rows.Next()
+		err = rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+
+		if err != nil {
+			c.JSON(500, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
 
 		es := controllers.GetEventSub(aw, user.Token)
 		es.OnStarted(func() {
@@ -65,9 +85,9 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 		eventSubs[user.Token] = es
 	}
 
-	c.Header("Set-Cookie", "token="+token+"; Path=/;")
+	c.Header("Set-Cookie", "token="+user.Token+"; Path=/;")
 	c.JSON(200, gin.H{
-		"token": token,
+		"token": user.Token,
 		"user":  user,
 	})
 }

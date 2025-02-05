@@ -6,6 +6,7 @@ import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -58,6 +59,50 @@ func RequestAppToken(clientId string, clientSecret string) (string, error) {
 	return tokenResponse.AccessToken, nil
 }
 
+func RequestUserToken(code string) (string, error) {
+	twitchUrl := "https://id.twitch.tv/oauth2/token"
+	appUrl := os.Getenv("APP_URL")
+	clientId := os.Getenv("TWITCH_CLIENT_ID")
+	clientSecret := os.Getenv("TWITCH_CLIENT_SECRET")
+
+	request := &twitch.TokenFromCodeRequest{
+		ClientId:     clientId,
+		ClientSecret: clientSecret,
+		Code:         code,
+		GrantType:    "authorization_code",
+		RedirectUri:  appUrl,
+	}
+	requestBody := strings.NewReader("client_id=" + request.ClientId + "&client_secret=" + request.ClientSecret + "&code=" + request.Code + "&grant_type=" + request.GrantType + "&redirect_uri=" + request.RedirectUri)
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("POST", twitchUrl, requestBody)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		return "", err
+	}
+
+	var tokenResponse = &twitch.UserTokenResponse{}
+	err = json.Unmarshal(body, tokenResponse)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenResponse.AccessToken, nil
+}
+
 func (aw *ApiWrapper) GetUserInfoFromToken(userToken string) (twitch.UserInfo, error) {
 	twitchUrl := "https://api.twitch.tv/helix/users"
 
@@ -84,6 +129,10 @@ func (aw *ApiWrapper) GetUserInfoFromToken(userToken string) (twitch.UserInfo, e
 	err = json.Unmarshal(body, userInfoResponse)
 	if err != nil {
 		return twitch.UserInfo{}, err
+	}
+
+	if len(userInfoResponse.Data) == 0 {
+		return twitch.UserInfo{}, fmt.Errorf("failed to get user info : %s", string(body))
 	}
 
 	return userInfoResponse.Data[0], nil

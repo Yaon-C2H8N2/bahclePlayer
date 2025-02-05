@@ -27,13 +27,13 @@ export const Settings = (props: ISettingsProps) => {
         }).then((data) => {
             setRewards(data.rewards ?? [])
 
-            const queueRewardSetting = data.settings.find((setting: any) => setting.Config === "QUEUE_REDEMPTION")
-            const playlistRewardSetting = data.settings.find((setting: any) => setting.Config === "PLAYLIST_REDEMPTION")
-            const queueMethodSetting = data.settings.find((setting: any) => setting.Config === "QUEUE_METHOD")
-            const playlistMethodSetting = data.settings.find((setting: any) => setting.Config === "PLAYLIST_METHOD")
+            const queueRewardSetting = data.settings?.find((setting: any) => setting.Config === "QUEUE_REDEMPTION")
+            const playlistRewardSetting = data.settings?.find((setting: any) => setting.Config === "PLAYLIST_REDEMPTION")
+            const queueMethodSetting = data.settings?.find((setting: any) => setting.Config === "QUEUE_METHOD")
+            const playlistMethodSetting = data.settings?.find((setting: any) => setting.Config === "PLAYLIST_METHOD")
 
-            setQueueReward(data.rewards.find((reward: any) => reward.id === queueRewardSetting?.Value))
-            setPlaylistReward(data.rewards.find((reward: any) => reward.id === playlistRewardSetting?.Value))
+            setQueueReward(data.rewards?.find((reward: any) => reward.id === queueRewardSetting?.Value))
+            setPlaylistReward(data.rewards?.find((reward: any) => reward.id === playlistRewardSetting?.Value))
             setQueueMethod(queueMethodSetting?.Value)
             setPlaylistMethod(playlistMethodSetting?.Value)
 

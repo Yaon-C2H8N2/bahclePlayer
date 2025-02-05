@@ -138,7 +138,7 @@ export const Player = () => {
         <div className={"flex flex-col items-center w-full h-[100vh]"}>
             <div className={"flex flex-row w-full p-14 gap-10"}>
                 <div className={"flex w-2/3 justify-start items-center flex-col gap-2"}>
-                    <div className={"w-full min-w-96 min-h-[60vh] p-5"}>
+                    <div className={"w-full min-w-96 min-h-[60vh] p-5 justify-center items-center flex"}>
                         {playlist.length > 0 || queue.length > 0 ? (
                             <ReactPlayer
                                 height={"100%"}
