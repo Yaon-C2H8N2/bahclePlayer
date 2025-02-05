@@ -113,6 +113,6 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 			break
 		}
-		time.Sleep(30 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
