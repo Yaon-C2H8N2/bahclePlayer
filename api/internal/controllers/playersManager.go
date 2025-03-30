@@ -68,6 +68,7 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 			c.JSON(400, gin.H{
 				"message": "Player already exists",
 			})
+			return
 		}
 		pm.mutex.Unlock()
 	}()
@@ -75,6 +76,9 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	time.Sleep(10 * time.Second)
 	if token == "" {
 		conn.Close()
+		c.JSON(400, gin.H{
+			"message": "No message received before timeout",
+		})
 	}
 }
 

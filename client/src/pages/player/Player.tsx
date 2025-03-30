@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useState} from "react";
 import {Button} from "@/components/ui/button.tsx";
 import {fetchApi} from "@/lib/network.ts";
 import {Playlist} from "./components/Playlist.tsx";
@@ -8,7 +8,6 @@ import {useToast} from "@/hooks/use-toast.ts";
 
 
 export const Player = () => {
-    const socketLoaded = useRef(false)
     const [playlist, setPlaylist] = useState<any>([])
     const [queue, setQueue] = useState<any>([])
     const [currentVideo, setCurrentVideo] = useState<any>(null)
@@ -29,11 +28,7 @@ export const Player = () => {
     }
 
     const initSocket = () => {
-        //weird websocket stuff to avoid strict mode
-        let socket = null
-        if(!socketLoaded.current){
-            socketLoaded.current = true
-            socket = async () => {
+           let socket = async () => {
                 const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
                 const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
                 const ws = new WebSocket(`${wsProtocol}://${window.location.host}/api/player`);
@@ -71,7 +66,6 @@ export const Player = () => {
                 return ws;
             };
             socket()
-        }
     }
 
     useEffect(() => {

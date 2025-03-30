@@ -126,15 +126,27 @@ func (es *EventSub) InitSubscriptions(userToken string) {
 	var err error
 	err = es.subscribeToMessageEvents(userToken)
 	if err != nil {
-		fmt.Printf("Error subscribing to message events with token %s: %s\n", userToken, err)
+		errorMessage := fmt.Sprintf("Error subscribing to message events with token %s: %s", userToken, err)
+		fmt.Printf(errorMessage)
+		if es.onError != nil {
+			go es.onError(fmt.Errorf(errorMessage))
+		}
 	}
 	err = es.subscribeToRedemptionEvents(userToken)
 	if err != nil {
-		fmt.Printf("Error subscribing to redemption events with token %s: %s\n", userToken, err)
+		errorMessage := fmt.Sprintf("Error subscribing to redemption events with token %s: %s\n", userToken, err)
+		fmt.Printf(errorMessage)
+		if es.onError != nil {
+			go es.onError(fmt.Errorf(errorMessage))
+		}
 	}
 	err = es.subscribeToPollEvents(userToken)
 	if err != nil {
-		fmt.Printf("Error subscribing to poll events with token %s: %s\n", userToken, err)
+		errorMessage := fmt.Sprintf("Error subscribing to poll events with token %s: %s\n", userToken, err)
+		fmt.Printf(errorMessage)
+		if es.onError != nil {
+			go es.onError(fmt.Errorf(errorMessage))
+		}
 	}
 }
 
