@@ -33,34 +33,32 @@ export const Player = () => {
                 const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
                 const ws = new WebSocket(`${wsProtocol}://${window.location.host}/api/player`);
 
-                //token handshake
-                ws.onopen = () => {
-                    ws.send(JSON.stringify({
-                        token: token
-                    }))
-                }
-
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data)
-                    if(data.error){
+
+                    if(data.welcome){
+                        ws.send(JSON.stringify({
+                            token: token
+                        }))
+                    } else if(data.error){
                         toast.toast({
                             title: "Error",
                             description: data.error,
                             variant: "destructive",
                         })
                         return
+                    } else {
+                        if(data.type === "QUEUE"){
+                            setQueue([...queue, data])
+                        } else if(data.type === "PLAYLIST"){
+                            setPlaylist([...playlist, data])
+                        }
+                        toast.toast({
+                            title: `A video as been added to the ${data.type === "QUEUE " ? "queue" : "playlist"}`,
+                            description: data.title,
+                            duration: 5000
+                        })
                     }
-
-                    if(data.type === "QUEUE"){
-                        setQueue([...queue, data])
-                    } else if(data.type === "PLAYLIST"){
-                        setPlaylist([...playlist, data])
-                    }
-                    toast.toast({
-                        title: `A video as been added to the ${data.type === "QUEUE " ? "queue" : "playlist"}`,
-                        description: data.title,
-                        duration: 5000
-                    })
                 }
 
                 return ws;

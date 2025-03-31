@@ -44,42 +44,57 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 
 	token := ""
 	go func() {
-		_, messageBytes, err := conn.ReadMessage()
-		if err != nil {
-			c.JSON(500, gin.H{
-				"message": "An error occured when receiving welcome message",
-				"error":   err.Error(),
-			})
-			return
+		time.Sleep(10 * time.Second)
+		if token == "" {
+			payload := struct {
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}{
+				Error:   "Timeout",
+				Message: "No message received before timeout",
+			}
+
+			conn.WriteJSON(payload)
+			conn.Close()
 		}
-
-		var message struct{ token string }
-		json.Unmarshal(messageBytes, &message)
-		token = message.token
-
-		//TODO : implement token verification with twitch
-
-		pm.mutex.Lock()
-		if _, ok := pm.clients[token]; !ok && token != "" {
-			pm.clients[message.token] = conn
-
-			go pm.mainLoop(token)
-		} else {
-			c.JSON(400, gin.H{
-				"message": "Player already exists",
-			})
-			return
-		}
-		pm.mutex.Unlock()
 	}()
 
-	time.Sleep(10 * time.Second)
-	if token == "" {
-		conn.Close()
-		c.JSON(400, gin.H{
-			"message": "No message received before timeout",
-		})
+	welcome := struct {
+		Welcome string `json:"welcome"`
+	}{
+		Welcome: "Socket connection established",
 	}
+	conn.WriteJSON(welcome)
+
+	_, messageBytes, err := conn.ReadMessage()
+	if err != nil {
+		c.JSON(500, gin.H{
+			"message": "An error occured when receiving welcome message",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var message struct {
+		Token string `json:"token"`
+	}
+	json.Unmarshal(messageBytes, &message)
+	token = message.Token
+
+	//TODO : implement token verification with twitch
+
+	pm.mutex.Lock()
+	if _, ok := pm.clients[token]; !ok && token != "" {
+		pm.clients[message.Token] = conn
+
+		go pm.mainLoop(token)
+	} else {
+		c.JSON(400, gin.H{
+			"message": "Player already exists",
+		})
+		return
+	}
+	pm.mutex.Unlock()
 }
 
 func (pm *PlayersManager) mainLoop(token string) {
