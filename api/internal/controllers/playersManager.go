@@ -59,6 +59,7 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 		}
 	}()
 
+	pm.mutex.Lock()
 	welcome := struct {
 		Welcome string `json:"welcome"`
 	}{
@@ -83,16 +84,10 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 
 	//TODO : implement token verification with twitch
 
-	pm.mutex.Lock()
-	if _, ok := pm.clients[token]; !ok && token != "" {
+	if token != "" {
 		pm.clients[message.Token] = conn
 
 		go pm.mainLoop(token)
-	} else {
-		c.JSON(400, gin.H{
-			"message": "Player already exists",
-		})
-		return
 	}
 	pm.mutex.Unlock()
 }
@@ -120,7 +115,7 @@ func (pm *PlayersManager) mainLoop(token string) {
 	})
 
 	for {
-		err := conn.WriteMessage(websocket.PingMessage, nil)
+		err := conn.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
 		if err != nil {
 			unsubscribeEvent()
 			unsubscribeError()
