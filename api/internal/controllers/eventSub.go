@@ -45,7 +45,14 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 			continue
 		}
 		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
-		es := GetEventSub(apiWrapper, user.Token)
+		es, err := GetEventSub(apiWrapper, user.Token)
+
+		if err != nil {
+			fmt.Printf("Error getting event sub for user %s: %s\n", user.Username, err)
+			continue
+		}
+
+		es.user = user
 		es.OnStarted(func() {
 			es.DropAllSubscriptions(user.Token)
 			es.InitSubscriptions(user.Token)
@@ -57,12 +64,12 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 	return eventSubs
 }
 
-func GetEventSub(apiWrapper *ApiWrapper, token string) *EventSub {
+func GetEventSub(apiWrapper *ApiWrapper, token string) (*EventSub, error) {
 	userInfo, err := apiWrapper.GetUserInfoFromToken(token)
 
 	if err != nil {
 		fmt.Println("Error getting user info from token:", err)
-		return nil
+		return nil, err
 	}
 
 	conn := utils.GetConnection()
@@ -83,7 +90,7 @@ func GetEventSub(apiWrapper *ApiWrapper, token string) *EventSub {
 	}
 
 	newEventSub.apiWrapper = apiWrapper
-	return newEventSub
+	return newEventSub, nil
 }
 
 func (es *EventSub) Start() {
@@ -151,7 +158,7 @@ func (es *EventSub) InitSubscriptions(userToken string) {
 }
 
 func (es *EventSub) subscribeToEvent(userToken string, request twitch.SubscriptionRequest) error {
-	twitchUrl := "https://api.twitch.tv/helix/eventsub/subscriptions"
+	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
 
 	httpClient := &http.Client{}
 	bytes, _ := json.Marshal(request)
@@ -271,7 +278,8 @@ func (es *EventSub) subscribeToPollEvents(userToken string) error {
 
 func (es *EventSub) listenToMessages() {
 	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
-	conn, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
+	webSocketUrl := os.Getenv("TWITCH_EVENTSUB_WEBSOCKET_URL")
+	conn, _, err := websocket.DefaultDialer.Dial(webSocketUrl, nil)
 
 	if err != nil {
 		errMsg := fmt.Sprintf("eventSub[%s] couldn't dial twitch websocket: %s", es.user.Username, err)
@@ -334,6 +342,7 @@ func (es *EventSub) listenToMessages() {
 					break loopiloop
 				}
 				if es.onEvent != nil {
+					fmt.Printf("eventSub[%s] received notification: %s\n", es.user.Username, notificationMessage.Metadata.MessageType)
 					go es.onEvent(*notificationMessage)
 				}
 				break

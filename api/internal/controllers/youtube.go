@@ -26,7 +26,6 @@ func GetVideoInfo(id string) (youtube.VideoInfoResponse, error) {
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
-	fmt.Printf("Body: %s\n", body)
 	if err != nil {
 		return youtube.VideoInfoResponse{}, err
 	}

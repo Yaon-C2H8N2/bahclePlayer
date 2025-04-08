@@ -76,7 +76,15 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 			return
 		}
 
-		es := controllers.GetEventSub(aw, user.Token)
+		es, err := controllers.GetEventSub(aw, user.Token)
+
+		if err != nil {
+			c.JSON(500, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
 		es.OnStarted(func() {
 			es.DropAllSubscriptions(user.Token)
 			es.InitSubscriptions(user.Token)

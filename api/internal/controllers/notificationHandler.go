@@ -92,16 +92,16 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 			break
 		}
 	}
-	if songRequest.Method == "" {
-		fmt.Println("Redemption reward not found in user config")
-		return
-	}
 
 	for _, c := range config {
 		if c.Config == (songRequest.Type + "_METHOD") {
 			songRequest.Method = c.Value
 			break
 		}
+	}
+	if songRequest.Method == "" {
+		fmt.Println("Redemption reward not found in user config")
+		return
 	}
 
 	message := redemptionEvent.UserInput
@@ -120,6 +120,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		}
 		return
 	}
+	fmt.Printf("New video request : {twitch_id: %s, youtube_id: %s, method: %s}\n", redemptionEvent.BroadcasterUserId, youtubeId, songRequest.Method)
 	youtubeResults, err := GetVideoInfo(youtubeId)
 	if err != nil {
 		fmt.Println("Failed to get video info")
@@ -219,7 +220,7 @@ func insertRequestInDatabase(songRequest songRequests.SongRequest, broadcasterUs
 	var newVideo = models.UsersVideos{}
 	sql := `
 				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				VALUES ((SELECT user_id FROM users WHERE twitch_id = $1), $2, $3, $4, $5, $6, $7, $8)
 				RETURNING *;
 			`
 	rows := utils.DoRequest(

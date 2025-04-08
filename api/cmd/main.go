@@ -35,10 +35,9 @@ func main() {
 	playersManager := controllers.DefaultPlayersManager(eventSubs, apiWrapper)
 
 	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
-	apiPort := os.Getenv("API_PORT")
 
 	appStatus.Started = true
-	err := router.Run(fmt.Sprintf(":%s", apiPort))
+	err := router.Run(fmt.Sprintf(":%d", 8081))
 	if err != nil {
 		panic(err)
 	}

@@ -14,7 +14,7 @@ RUN npm run build
 
 FROM nginx:${NGINX_VERISON}-alpine${ALPINE_VERSION}-slim
 
-ARG API_PORT=8080
+ARG API_PORT=8081
 ARG WEB_PORT=80
 
 COPY docker/client/etc/nginx/conf.d /etc/nginx/conf.d
