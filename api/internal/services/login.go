@@ -145,7 +145,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 			es.InitSubscriptions(user.Token)
 		})
 		es.Start()
-		eventSubs[user.Token] = es
+		eventSubs[user.TwitchId] = es
 	}
 
 	c.Header("Set-Cookie", "token="+user.Token+"; Path=/;")

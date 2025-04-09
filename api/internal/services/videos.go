@@ -9,7 +9,7 @@ import (
 	"regexp"
 )
 
-func addVideos(c *gin.Context, pm *controllers.PlayersManager, aw *controllers.ApiWrapper) {
+func addVideos(c *gin.Context, pm *controllers.PlayersManager) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 	userContext, _ := c.Get("User")
@@ -68,7 +68,7 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager, aw *controllers.A
 		return
 	}
 
-	conn := pm.GetConnFromToken(user.Token)
+	conn := pm.GetConnFromTwitchId(user.TwitchId)
 
 	if conn != nil {
 		for _, cn := range conn {

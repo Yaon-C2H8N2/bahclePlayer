@@ -9,17 +9,14 @@ export const Home = () => {
 
     useEffect(() => {
         setLoading(true)
-        fetchApi("/api/appinfo").then((res) => {
-            return res.json()
-        }).then((data) => {
-            setAppInfo(data)
-            setLoading(false)
-        })
 
         const code = new URLSearchParams(window.location.search).get("code")
         const error = new URLSearchParams(window.location.search).get("error")
+        const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
 
-        if (code) {
+        if (token) {
+            window.location.href = "/player"
+        } else if (code && !token) {
             setLoading(true)
             fetchApi(`/api/login`, {method: "POST", body: JSON.stringify({code})})
                 .then((response) => response.json())
@@ -34,6 +31,12 @@ export const Home = () => {
             //TODO: Show error
         }
 
+        fetchApi("/api/appinfo").then((res) => {
+            return res.json()
+        }).then((data) => {
+            setAppInfo(data)
+            setLoading(false)
+        })
     }, [])
 
     return (

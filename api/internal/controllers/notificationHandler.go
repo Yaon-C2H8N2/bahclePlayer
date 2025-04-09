@@ -18,7 +18,7 @@ type NotificationHandler struct {
 	onNewVideo     func(video models.UsersVideos)
 }
 
-func (nh *NotificationHandler) OnEvent(callback func(event models.UsersVideos)) func() {
+func (nh *NotificationHandler) OnNewVideo(callback func(event models.UsersVideos)) func() {
 	nh.onNewVideo = callback
 
 	return func() {

@@ -32,11 +32,11 @@ func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrappe
 	}
 }
 
-func (pm *PlayersManager) GetConnFromToken(token string) []*websocket.Conn {
+func (pm *PlayersManager) GetConnFromTwitchId(twitchId string) []*websocket.Conn {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	conn := pm.clients[token]
+	conn := pm.clients[twitchId]
 
 	return conn
 }
@@ -95,22 +95,34 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	json.Unmarshal(messageBytes, &message)
 	token := message.Token
 
-	//TODO : implement token verification with twitch
+	userInfo, err := pm.apiWrapper.GetUserInfoFromToken(token)
+	if err != nil {
+		payload := struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}{
+			Error:   err.Error(),
+			Message: "An error occured when getting user info",
+		}
+		conn.WriteJSON(payload)
+		conn.Close()
+		return
+	}
 
 	if token != "" {
 		tokenCh <- token
-		pm.clients[message.Token] = append(pm.clients[message.Token], conn)
+		pm.clients[userInfo.ID] = append(pm.clients[userInfo.ID], conn)
 
-		go pm.mainLoop(token)
+		go pm.mainLoop(userInfo.ID)
 	}
 	pm.mutex.Unlock()
 }
 
-func (pm *PlayersManager) mainLoop(token string) {
-	conn := pm.clients[token]
+func (pm *PlayersManager) mainLoop(twitchId string) {
+	conn := pm.clients[twitchId]
+	eventSub := pm.eventSubs[twitchId]
 
-	eventSub := pm.eventSubs[token]
-	unsubscribeEvent := eventSub.notificationHandler.OnEvent(func(newVideo models.UsersVideos) {
+	unsubscribeEvent := eventSub.notificationHandler.OnNewVideo(func(newVideo models.UsersVideos) {
 		for _, c := range conn {
 			err := c.WriteJSON(newVideo)
 			if err != nil {
@@ -152,7 +164,7 @@ func (pm *PlayersManager) mainLoop(token string) {
 				if len(conn) > 1 {
 					conn = append(conn[:index], conn[index+1:]...)
 				} else {
-					delete(pm.clients, token)
+					delete(pm.clients, twitchId)
 				}
 				pm.mutex.Unlock()
 

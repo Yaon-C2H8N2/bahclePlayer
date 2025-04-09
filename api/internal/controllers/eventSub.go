@@ -15,7 +15,6 @@ import (
 )
 
 type EventSub struct {
-	onEvent             func(event twitch.NotificationMessage)
 	onStarted           func()
 	onError             func(error error)
 	sessionId           string
@@ -29,7 +28,8 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 	defer conn.Release()
 
 	sql := `
-			SELECT * FROM users
+			SELECT user_id, username, twitch_id, token, token_created_at
+			FROM users
 		`
 	rows := utils.DoRequest(conn, sql)
 	var users []models.Users
@@ -59,7 +59,7 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 			es.InitSubscriptions(user.Token)
 		})
 		es.Start()
-		eventSubs[user.Token] = es
+		eventSubs[user.TwitchId] = es
 	}
 
 	return eventSubs
@@ -77,13 +77,14 @@ func GetEventSub(apiWrapper *ApiWrapper, token string) (*EventSub, error) {
 	defer conn.Release()
 
 	sql := `
-			SELECT * FROM users
+			SELECT user_id, username, twitch_id, token, token_created_at
+			FROM users
 			WHERE twitch_id = $1
 		`
 	rows := utils.DoRequest(conn, sql, userInfo.ID)
 	var user models.Users
 	if rows.Next() {
-		rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		rows.Scan(&user.UserId, &user.Username, &user.TwitchId, &user.Token, &user.TokenCreatedAt)
 	}
 
 	var newEventSub = &EventSub{
@@ -331,11 +332,8 @@ func (es *EventSub) listenToMessages() {
 					}
 					break loopiloop
 				}
-				if es.onEvent != nil {
-					fmt.Printf("eventSub[%s] received notification: %s\n", es.user.Username, notificationMessage.Metadata.MessageType)
-					go es.notificationHandler.Handle(messageBytes)
-					go es.onEvent(*notificationMessage)
-				}
+				fmt.Printf("eventSub[%s] received notification: %s\n", es.user.Username, notificationMessage.Metadata.MessageType)
+				go es.notificationHandler.Handle(messageBytes)
 				break
 			}
 		}

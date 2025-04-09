@@ -29,7 +29,7 @@ func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controlle
 		getRewardsIds(c, aw)
 	})
 	router.POST("/addVideo", func(c *gin.Context) {
-		addVideos(c, pm, aw)
+		addVideos(c, pm)
 	})
 	router.GET("/appinfo", func(c *gin.Context) {
 		c.JSON(200, status)
