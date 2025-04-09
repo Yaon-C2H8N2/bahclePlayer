@@ -7,7 +7,6 @@ import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/songRequests"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
-	"github.com/gorilla/websocket"
 	"regexp"
 )
 
@@ -16,16 +15,23 @@ type NotificationHandler struct {
 	apiWrapper     *ApiWrapper
 	requestManager *songRequests.RequestManager
 	token          string
-	conn           *websocket.Conn
+	onNewVideo     func(video models.UsersVideos)
 }
 
-func GetNotificationHandler(apiWrapper *ApiWrapper, token string, conn *websocket.Conn) *NotificationHandler {
+func (nh *NotificationHandler) OnEvent(callback func(event models.UsersVideos)) func() {
+	nh.onNewVideo = callback
+
+	return func() {
+		nh.onNewVideo = nil
+	}
+}
+
+func GetNotificationHandler(apiWrapper *ApiWrapper, token string) *NotificationHandler {
 	handler := &NotificationHandler{
 		handlers:       make(map[string]func([]byte)),
 		apiWrapper:     apiWrapper,
 		requestManager: songRequests.GetRequestManager(),
 		token:          token,
-		conn:           conn,
 	}
 
 	handler.handlers["channel.channel_points_custom_reward_redemption.add"] = handler.handleChannelPointsCustomRewardRedemptionAdd
@@ -157,10 +163,9 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 			fmt.Println("Failed to insert video into database")
 			return
 		}
-		err = nh.conn.WriteJSON(newVideo)
-		if err != nil {
-			fmt.Println("Failed to send song request to player")
-			return
+
+		if nh.onNewVideo != nil {
+			nh.onNewVideo(newVideo)
 		}
 	}
 }
@@ -200,10 +205,8 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 			return
 		}
 
-		err = nh.conn.WriteJSON(newVideo)
-		if err != nil {
-			fmt.Println("Failed to send song request to player")
-			return
+		if nh.onNewVideo != nil {
+			nh.onNewVideo(newVideo)
 		}
 	}
 	err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, songRequest.TwitchRedemptionID, pollEndEvent.BroadcasterUserId, songRequest.TwitchRewardID, newStatus)

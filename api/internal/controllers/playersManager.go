@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"
@@ -95,12 +95,20 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 func (pm *PlayersManager) mainLoop(token string) {
 	conn := pm.clients[token]
 
-	notifcationHandler := GetNotificationHandler(pm.apiWrapper, token, conn)
-
 	eventSub := pm.eventSubs[token]
-	unsubscribeEvent := eventSub.OnEvent(func(event twitch.NotificationMessage) {
-		eventBytes, _ := json.Marshal(event)
-		notifcationHandler.Handle(eventBytes)
+	unsubscribeEvent := eventSub.notificationHandler.OnEvent(func(newVideo models.UsersVideos) {
+		err := conn.WriteJSON(newVideo)
+		if err != nil {
+			payload := struct {
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}{
+				Error:   err.Error(),
+				Message: "An error occured when sending new video",
+			}
+
+			conn.WriteJSON(payload)
+		}
 	})
 	unsubscribeError := eventSub.OnError(func(eventSubError error) {
 		payload := struct {

@@ -15,12 +15,13 @@ import (
 )
 
 type EventSub struct {
-	onEvent    func(event twitch.NotificationMessage)
-	onStarted  func()
-	onError    func(error error)
-	sessionId  string
-	apiWrapper *ApiWrapper
-	user       models.Users
+	onEvent             func(event twitch.NotificationMessage)
+	onStarted           func()
+	onError             func(error error)
+	sessionId           string
+	apiWrapper          *ApiWrapper
+	notificationHandler *NotificationHandler
+	user                models.Users
 }
 
 func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
@@ -90,19 +91,12 @@ func GetEventSub(apiWrapper *ApiWrapper, token string) (*EventSub, error) {
 	}
 
 	newEventSub.apiWrapper = apiWrapper
+	newEventSub.notificationHandler = GetNotificationHandler(apiWrapper, user.Token)
 	return newEventSub, nil
 }
 
 func (es *EventSub) Start() {
 	es.listenToMessages()
-}
-
-func (es *EventSub) OnEvent(callback func(event twitch.NotificationMessage)) func() {
-	es.onEvent = callback
-
-	return func() {
-		es.onEvent = nil
-	}
 }
 
 func (es *EventSub) OnError(callback func(err error)) func() {
@@ -119,10 +113,6 @@ func (es *EventSub) OnStarted(callback func()) func() {
 	return func() {
 		es.onStarted = nil
 	}
-}
-
-func (es *EventSub) IsStarted() bool {
-	return es.sessionId != ""
 }
 
 func (es *EventSub) DropAllSubscriptions(userToken string) {
@@ -343,6 +333,7 @@ func (es *EventSub) listenToMessages() {
 				}
 				if es.onEvent != nil {
 					fmt.Printf("eventSub[%s] received notification: %s\n", es.user.Username, notificationMessage.Metadata.MessageType)
+					go es.notificationHandler.Handle(messageBytes)
 					go es.onEvent(*notificationMessage)
 				}
 				break
