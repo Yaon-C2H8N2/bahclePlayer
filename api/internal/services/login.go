@@ -7,6 +7,61 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
+	if c.Request.URL.Path == "/player" || c.Request.URL.Path == "/login" || c.Request.URL.Path == "/logout" || c.Request.URL.Path == "/appinfo" {
+		c.Next()
+		return
+	}
+
+	token := c.Request.Header.Get("Authorization")
+	if token == "" || len(token) < 7 {
+		c.JSON(401, gin.H{
+			"error": "missing access_token",
+		})
+		c.Abort()
+		return
+	}
+	token = token[7:]
+
+	userInfo, err := aw.GetUserInfoFromToken(token)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		c.Abort()
+		return
+	}
+
+	conn := utils.GetConnection()
+	sql := `
+			SELECT users.user_id, users.twitch_id, users.username, users.token, users.token_created_at
+			FROM users
+			WHERE twitch_id = $1
+		`
+	rows := utils.DoRequest(conn, sql, userInfo.ID)
+	var user models.Users
+	if !rows.Next() {
+		c.JSON(401, gin.H{
+			"error": "User not found",
+		})
+		c.Abort()
+		return
+	}
+
+	err = rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		c.Abort()
+		return
+	}
+
+	c.Set("User", user)
+	c.Set("TwitchUser", userInfo)
+	c.Next()
+}
+
 func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*controllers.EventSub) {
 	loginRequest := models.LoginRequest{}
 	err := c.BindJSON(&loginRequest)

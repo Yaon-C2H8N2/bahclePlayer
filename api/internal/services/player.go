@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -11,23 +12,9 @@ func getPlayer(c *gin.Context, pm *controllers.PlayersManager) {
 	pm.CreatePlayer(c)
 }
 
-func getPlaylistAndQueue(c *gin.Context, aw *controllers.ApiWrapper) {
-	token := c.Request.Header.Get("Authorization")
-	token = token[7:]
-	if token == "" {
-		c.JSON(400, gin.H{
-			"error": "missing access_token",
-		})
-		return
-	}
-
-	userInfo, err := aw.GetUserInfoFromToken(token)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
+func getPlaylistAndQueue(c *gin.Context) {
+	TwitchUserContext, _ := c.Get("TwitchUser")
+	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
 	conn := utils.GetConnection()
 	defer conn.Release()
@@ -41,6 +28,7 @@ func getPlaylistAndQueue(c *gin.Context, aw *controllers.ApiWrapper) {
 		`
 	rows := utils.DoRequest(conn, sql, userInfo.ID)
 	var results []models.UsersVideos
+	var err error
 	for rows.Next() {
 		var result models.UsersVideos
 		err = rows.Scan(&result.VideoId, &result.UserId, &result.YoutubeId, &result.Url, &result.Title, &result.Duration, &result.Type, &result.CreatedAt, &result.ThumbnailUrl, &result.AddedBy)
@@ -59,28 +47,14 @@ func getPlaylistAndQueue(c *gin.Context, aw *controllers.ApiWrapper) {
 	})
 }
 
-func deleteVideo(c *gin.Context, aw *controllers.ApiWrapper) {
-	token := c.Request.Header.Get("Authorization")
-	token = token[7:]
-	if token == "" {
-		c.JSON(400, gin.H{
-			"error": "missing access_token",
-		})
-		return
-	}
+func deleteVideo(c *gin.Context) {
+	TwitchUserContext, _ := c.Get("TwitchUser")
+	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
 	videoID := c.Query("video_id")
 	if videoID == "" {
 		c.JSON(400, gin.H{
 			"error": "missing video_id",
-		})
-		return
-	}
-
-	userInfo, err := aw.GetUserInfoFromToken(token)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
 		})
 		return
 	}

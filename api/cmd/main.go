@@ -14,8 +14,6 @@ func main() {
 	utils.Migrate()
 	utils.InitDatabase()
 
-	router := gin.Default()
-
 	appStatus := models.AppStatus{
 		TwitchClientId: os.Getenv("TWITCH_CLIENT_ID"),
 		AppUrl:         os.Getenv("APP_URL"),
@@ -34,6 +32,10 @@ func main() {
 	fmt.Println("EventSubs initialized")
 	playersManager := controllers.DefaultPlayersManager(eventSubs, apiWrapper)
 
+	router := gin.Default()
+	router.Use(func(c *gin.Context) {
+		services.AuthMiddleware(c, apiWrapper)
+	})
 	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
 
 	appStatus.Started = true

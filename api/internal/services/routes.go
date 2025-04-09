@@ -17,10 +17,10 @@ func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controlle
 		getPlayer(c, pm)
 	})
 	router.GET("/playlist", func(c *gin.Context) {
-		getPlaylistAndQueue(c, aw)
+		getPlaylistAndQueue(c)
 	})
 	router.DELETE("/playlist", func(c *gin.Context) {
-		deleteVideo(c, aw)
+		deleteVideo(c)
 	})
 	router.GET("/settings", func(c *gin.Context) {
 		saveSettings(c, aw)

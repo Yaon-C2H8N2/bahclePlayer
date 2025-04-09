@@ -4,19 +4,16 @@ import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/songRequests"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/gin-gonic/gin"
 	"regexp"
 )
 
 func addVideos(c *gin.Context, pm *controllers.PlayersManager, aw *controllers.ApiWrapper) {
-	token := c.Request.Header.Get("Authorization")
-	token = token[7:]
-	if token == "" {
-		c.JSON(400, gin.H{
-			"error": "missing access_token",
-		})
-		return
-	}
+	TwitchUserContext, _ := c.Get("TwitchUser")
+	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
+	userContext, _ := c.Get("User")
+	user, _ := userContext.(models.Users)
 
 	videoAddRequest := models.VideoAddRequest{}
 	err := c.BindJSON(&videoAddRequest)
@@ -24,14 +21,6 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager, aw *controllers.A
 	if err != nil {
 		c.JSON(400, gin.H{
 			"error": "Failed to bind login request",
-		})
-		return
-	}
-
-	userInfo, err := aw.GetUserInfoFromToken(token)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
 		})
 		return
 	}
@@ -79,7 +68,7 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager, aw *controllers.A
 		return
 	}
 
-	conn := pm.GetConnFromToken(token)
+	conn := pm.GetConnFromToken(user.Token)
 
 	if conn != nil {
 		for _, cn := range conn {

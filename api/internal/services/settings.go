@@ -3,30 +3,19 @@ package services
 import (
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
 func getRewardsIds(c *gin.Context, aw *controllers.ApiWrapper) {
-	token := c.Request.Header.Get("Authorization")
-	token = token[7:]
-	if token == "" {
-		c.JSON(400, gin.H{
-			"error": "missing access_token",
-		})
-		return
-	}
+	TwitchUserContext, _ := c.Get("TwitchUser")
+	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
+	userContext, _ := c.Get("User")
+	user, _ := userContext.(models.Users)
 
-	userInfo, err := aw.GetUserInfoFromToken(token)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	rewards, err := aw.GetChannelRewards(token, userInfo.ID)
+	rewards, err := aw.GetChannelRewards(user.Token, userInfo.ID)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -66,22 +55,8 @@ func getSettings(user twitch.UserInfo) []struct{ Config, Value string } {
 }
 
 func saveSettings(c *gin.Context, aw *controllers.ApiWrapper) {
-	token := c.Request.Header.Get("Authorization")
-	token = token[7:]
-	if token == "" {
-		c.JSON(400, gin.H{
-			"error": "missing access_token",
-		})
-		return
-	}
-
-	userInfo, err := aw.GetUserInfoFromToken(token)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
+	TwitchUserContext, _ := c.Get("TwitchUser")
+	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
 	playlistRedemption := c.Query("playlist_redemption")
 	queueRedemption := c.Query("queue_redemption")
