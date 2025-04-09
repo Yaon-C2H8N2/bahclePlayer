@@ -12,7 +12,7 @@ import (
 
 type PlayersManager struct {
 	mutex      *sync.Mutex
-	clients    map[string]*websocket.Conn
+	clients    map[string][]*websocket.Conn
 	upgrader   websocket.Upgrader
 	eventSubs  map[string]*EventSub
 	apiWrapper *ApiWrapper
@@ -21,7 +21,7 @@ type PlayersManager struct {
 func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrapper) *PlayersManager {
 	return &PlayersManager{
 		mutex:   &sync.Mutex{},
-		clients: make(map[string]*websocket.Conn),
+		clients: make(map[string][]*websocket.Conn),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -32,7 +32,7 @@ func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrappe
 	}
 }
 
-func (pm *PlayersManager) GetConnFromToken(token string) *websocket.Conn {
+func (pm *PlayersManager) GetConnFromToken(token string) []*websocket.Conn {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
@@ -51,10 +51,10 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 		return
 	}
 
-	token := ""
+	tokenCh := make(chan string, 1)
 	go func() {
-		time.Sleep(10 * time.Second)
-		if token == "" {
+		select {
+		case <-time.After(10 * time.Second):
 			payload := struct {
 				Error   string `json:"error"`
 				Message string `json:"message"`
@@ -65,6 +65,9 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 
 			conn.WriteJSON(payload)
 			conn.Close()
+			break
+		case <-tokenCh:
+			break
 		}
 	}()
 
@@ -82,6 +85,7 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 			"message": "An error occured when receiving welcome message",
 			"error":   err.Error(),
 		})
+		conn.Close()
 		return
 	}
 
@@ -89,12 +93,13 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 		Token string `json:"token"`
 	}
 	json.Unmarshal(messageBytes, &message)
-	token = message.Token
+	token := message.Token
 
 	//TODO : implement token verification with twitch
 
 	if token != "" {
-		pm.clients[message.Token] = conn
+		tokenCh <- token
+		pm.clients[message.Token] = append(pm.clients[message.Token], conn)
 
 		go pm.mainLoop(token)
 	}
@@ -106,44 +111,54 @@ func (pm *PlayersManager) mainLoop(token string) {
 
 	eventSub := pm.eventSubs[token]
 	unsubscribeEvent := eventSub.notificationHandler.OnEvent(func(newVideo models.UsersVideos) {
-		err := conn.WriteJSON(newVideo)
-		if err != nil {
+		for _, c := range conn {
+			err := c.WriteJSON(newVideo)
+			if err != nil {
+				payload := struct {
+					Error   string `json:"error"`
+					Message string `json:"message"`
+				}{
+					Error:   err.Error(),
+					Message: "An error occured when sending new video",
+				}
+
+				c.WriteJSON(payload)
+			}
+		}
+	})
+	unsubscribeError := eventSub.OnError(func(eventSubError error) {
+		for _, c := range conn {
 			payload := struct {
 				Error   string `json:"error"`
 				Message string `json:"message"`
 			}{
-				Error:   err.Error(),
-				Message: "An error occured when sending new video",
+				Error:   eventSubError.Error(),
+				Message: "An error occured with Twitch event listener",
 			}
 
-			conn.WriteJSON(payload)
+			c.WriteJSON(payload)
 		}
-	})
-	unsubscribeError := eventSub.OnError(func(eventSubError error) {
-		payload := struct {
-			Error   string `json:"error"`
-			Message string `json:"message"`
-		}{
-			Error:   eventSubError.Error(),
-			Message: "An error occured with Twitch event listener",
-		}
-
-		conn.WriteJSON(payload)
 	})
 
 	for {
-		err := conn.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
-		if err != nil {
-			unsubscribeEvent()
-			unsubscribeError()
-			conn.Close()
+		for index, c := range conn {
+			err := c.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
+			if err != nil {
+				unsubscribeEvent()
+				unsubscribeError()
+				c.Close()
 
-			pm.mutex.Lock()
-			delete(pm.clients, token)
-			pm.mutex.Unlock()
+				pm.mutex.Lock()
+				if len(conn) > 1 {
+					conn = append(conn[:index], conn[index+1:]...)
+				} else {
+					delete(pm.clients, token)
+				}
+				pm.mutex.Unlock()
 
-			break
+				break
+			}
+			time.Sleep(5 * time.Second)
 		}
-		time.Sleep(5 * time.Second)
 	}
 }

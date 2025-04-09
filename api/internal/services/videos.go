@@ -82,12 +82,8 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager, aw *controllers.A
 	conn := pm.GetConnFromToken(token)
 
 	if conn != nil {
-		err = conn.WriteJSON(newVideo)
-		if err != nil {
-			c.JSON(500, gin.H{
-				"error": err.Error(),
-			})
-			return
+		for _, cn := range conn {
+			cn.WriteJSON(newVideo)
 		}
 	}
 
