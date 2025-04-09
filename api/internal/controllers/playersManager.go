@@ -32,6 +32,15 @@ func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrappe
 	}
 }
 
+func (pm *PlayersManager) GetConnFromToken(token string) *websocket.Conn {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	conn := pm.clients[token]
+
+	return conn
+}
+
 func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	conn, err := pm.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {

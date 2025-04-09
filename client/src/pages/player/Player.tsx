@@ -5,6 +5,7 @@ import {Playlist} from "./components/Playlist.tsx";
 import ReactPlayer from "react-player";
 import {SkipForward} from "lucide-react";
 import {useToast} from "@/hooks/use-toast.ts";
+import {ManualAddDialog} from "@/pages/player/components/ManualAddDialog.tsx";
 
 
 export const Player = () => {
@@ -12,6 +13,7 @@ export const Player = () => {
     const [queue, setQueue] = useState<any>([])
     const [currentVideo, setCurrentVideo] = useState<any>(null)
     const [playlistIndex, setPlaylistIndex] = useState<number>(-1)
+    const [openManualAdd, setOpenManualAdd] = useState<boolean>(false)
     const toast = useToast()
 
     const formatISODuration = (duration: string) => {
@@ -27,8 +29,16 @@ export const Player = () => {
         return `${minutes}:${formattedSeconds}`;
     }
 
-    const initSocket = () => {
-           let socket = async () => {
+    const addToQueue = (video: any) => {
+        setQueue((prev: any[]) => [video, ...prev])
+    }
+
+    const addToPlaylist = (video: any) => {
+        setPlaylist((prev: any[]) => [video, ...prev])
+    }
+
+    const initSocket = (playlistCallback: (video: any) => void, queueCallback: (video: any) => void) => {
+           let socket = async (playlistCallback: (video: any) => void, queueCallback: (video: any) => void) => {
                 const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
                 const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
                 const ws = new WebSocket(`${wsProtocol}://${window.location.host}/api/player`);
@@ -49,9 +59,9 @@ export const Player = () => {
                         return
                     } else {
                         if(data.type === "QUEUE"){
-                            setQueue([...queue, data])
+                            queueCallback(data)
                         } else if(data.type === "PLAYLIST"){
-                            setPlaylist([...playlist, data])
+                            playlistCallback(data)
                         }
                         toast.toast({
                             title: `A video as been added to the ${data.type === "QUEUE " ? "queue" : "playlist"}`,
@@ -63,7 +73,7 @@ export const Player = () => {
 
                 return ws;
             };
-            socket()
+            socket(playlistCallback, queueCallback)
     }
 
     useEffect(() => {
@@ -90,7 +100,7 @@ export const Player = () => {
                 setPlaylistIndex(0)
             }
         })
-        initSocket()
+        initSocket(addToPlaylist, addToQueue)
     }, [])
 
     const handleNextVideo = () => {
@@ -160,9 +170,11 @@ export const Player = () => {
                     </div>
                 </div>
                 <div className={"w-1/3 max-h-[80vh] min-h-[80vh] overflow-y-auto"}>
+                    <Button onClick={() => setOpenManualAdd(true)}>Add track</Button>
                     <Playlist playlist={playlist} queue={queue} currentlyPlaying={currentVideo} onRemoveVideo={(video) => removeVideo(video, false)}/>
                 </div>
             </div>
+            <ManualAddDialog open={openManualAdd} onClose={() => setOpenManualAdd(false)} />
         </div>
     )
 }

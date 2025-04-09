@@ -7,9 +7,5 @@ export const fetchApi = async (url: string, options: RequestInit = {}) => {
         }
     }
 
-    const response = await fetch(url, options);
-    if (!response.ok) {
-        throw new Error(response.statusText);
-    }
-    return response;
+    return await fetch(url, options);
 }

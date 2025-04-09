@@ -158,7 +158,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		songRequest.TwitchPollID = twitchPollId
 		nh.requestManager.AddRequest(songRequest)
 	} else if songRequest.Method == "DIRECT" {
-		newVideo, err := insertRequestInDatabase(songRequest, redemptionEvent.BroadcasterUserId)
+		newVideo, err := songRequests.InsertRequestInDatabase(songRequest, redemptionEvent.BroadcasterUserId)
 		if err != nil {
 			fmt.Println("Failed to insert video into database")
 			return
@@ -199,7 +199,7 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	if maxChoice == "Yes" && maxVotes > 0 {
 		newStatus = "FULFILLED"
 
-		newVideo, err := insertRequestInDatabase(songRequest, pollEndEvent.BroadcasterUserId)
+		newVideo, err := songRequests.InsertRequestInDatabase(songRequest, pollEndEvent.BroadcasterUserId)
 		if err != nil {
 			fmt.Println("Failed to insert video into database")
 			return
@@ -214,33 +214,4 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 		fmt.Println("Failed to update redemption status")
 		return
 	}
-}
-
-func insertRequestInDatabase(songRequest songRequests.SongRequest, broadcasterUserId string) (models.UsersVideos, error) {
-	conn := utils.GetConnection()
-	defer conn.Release()
-
-	var newVideo = models.UsersVideos{}
-	sql := `
-				INSERT INTO users_videos(user_id, youtube_id, url, title, duration, type, thumbnail_url, added_by)
-				VALUES ((SELECT user_id FROM users WHERE twitch_id = $1), $2, $3, $4, $5, $6, $7, $8)
-				RETURNING *;
-			`
-	rows := utils.DoRequest(
-		conn,
-		sql,
-		broadcasterUserId,
-		songRequest.YoutubeID,
-		"https://www.youtube.com/watch?v="+songRequest.YoutubeID,
-		songRequest.Title,
-		songRequest.Duration,
-		songRequest.Type,
-		songRequest.Thumbnail,
-		"twitch", //TODO : get added_by from user
-	)
-	if !rows.Next() {
-		return newVideo, fmt.Errorf("Failed to insert video into database")
-	}
-	rows.Scan(&newVideo.VideoId, &newVideo.UserId, &newVideo.YoutubeId, &newVideo.Url, &newVideo.Title, &newVideo.Duration, &newVideo.Type, &newVideo.CreatedAt, &newVideo.ThumbnailUrl, &newVideo.AddedBy)
-	return newVideo, nil
 }
