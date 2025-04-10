@@ -7,6 +7,7 @@ import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/songRequests"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
+	"github.com/google/uuid"
 	"regexp"
 )
 
@@ -15,14 +16,51 @@ type NotificationHandler struct {
 	apiWrapper     *ApiWrapper
 	requestManager *songRequests.RequestManager
 	token          string
-	onNewVideo     func(video models.UsersVideos)
+	onNewVideo     []struct {
+		uuid string
+		fn   func(video models.UsersVideos)
+	}
+	onChatMessage []struct {
+		uuid string
+		fn   func(message twitch.ChatMessageEvent)
+	}
 }
 
 func (nh *NotificationHandler) OnNewVideo(callback func(event models.UsersVideos)) func() {
-	nh.onNewVideo = callback
+	nh.onNewVideo = append(nh.onNewVideo, struct {
+		uuid string
+		fn   func(video models.UsersVideos)
+	}{
+		uuid: uuid.New().String(),
+		fn:   callback,
+	})
 
 	return func() {
-		nh.onNewVideo = nil
+		for i, v := range nh.onNewVideo {
+			if v.uuid == nh.onNewVideo[len(nh.onNewVideo)-1].uuid {
+				nh.onNewVideo = append(nh.onNewVideo[:i], nh.onNewVideo[i+1:]...)
+				break
+			}
+		}
+	}
+}
+
+func (nh *NotificationHandler) OnChatMessage(callback func(message twitch.ChatMessageEvent)) func() {
+	nh.onChatMessage = append(nh.onChatMessage, struct {
+		uuid string
+		fn   func(message twitch.ChatMessageEvent)
+	}{
+		uuid: uuid.New().String(),
+		fn:   callback,
+	})
+
+	return func() {
+		for i, v := range nh.onChatMessage {
+			if v.uuid == nh.onChatMessage[len(nh.onChatMessage)-1].uuid {
+				nh.onChatMessage = append(nh.onChatMessage[:i], nh.onChatMessage[i+1:]...)
+				break
+			}
+		}
 	}
 }
 
@@ -36,6 +74,7 @@ func GetNotificationHandler(apiWrapper *ApiWrapper, token string) *NotificationH
 
 	handler.handlers["channel.channel_points_custom_reward_redemption.add"] = handler.handleChannelPointsCustomRewardRedemptionAdd
 	handler.handlers["channel.poll.end"] = handler.handleChannelPollEnd
+	handler.handlers["channel.chat.message"] = handler.handleChatMessage
 
 	return handler
 }
@@ -164,8 +203,10 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 			return
 		}
 
-		if nh.onNewVideo != nil {
-			nh.onNewVideo(newVideo)
+		for _, v := range nh.onNewVideo {
+			if v.fn != nil {
+				v.fn(newVideo)
+			}
 		}
 	}
 }
@@ -205,13 +246,30 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 			return
 		}
 
-		if nh.onNewVideo != nil {
-			nh.onNewVideo(newVideo)
+		for _, v := range nh.onNewVideo {
+			if v.fn != nil {
+				v.fn(newVideo)
+			}
 		}
 	}
 	err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, songRequest.TwitchRedemptionID, pollEndEvent.BroadcasterUserId, songRequest.TwitchRewardID, newStatus)
 	if err != nil {
 		fmt.Println("Failed to update redemption status")
 		return
+	}
+}
+
+func (nh *NotificationHandler) handleChatMessage(eventBytes []byte) {
+	var chatMessageEvent = &twitch.ChatMessageEvent{}
+	err := json.Unmarshal(eventBytes, chatMessageEvent)
+	if err != nil {
+		fmt.Println("Failed to unmarshal chat message event")
+		return
+	}
+
+	for _, v := range nh.onChatMessage {
+		if v.fn != nil {
+			v.fn(*chatMessageEvent)
+		}
 	}
 }

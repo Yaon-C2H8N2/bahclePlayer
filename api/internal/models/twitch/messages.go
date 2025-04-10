@@ -87,3 +87,38 @@ type ChannelPollEndEvent struct {
 	StartedAt time.Time `json:"started_at"`
 	EndedAt   time.Time `json:"ended_at"`
 }
+
+type ChatMessageEvent struct {
+	BroadcasterUserId    string `json:"broadcaster_user_id"`
+	BroadcasterUserLogin string `json:"broadcaster_user_login"`
+	BroadcasterUserName  string `json:"broadcaster_user_name"`
+	ChatterUserId        string `json:"chatter_user_id"`
+	ChatterUserLogin     string `json:"chatter_user_login"`
+	ChatterUserName      string `json:"chatter_user_name"`
+	MessageId            string `json:"message_id"`
+	Message              struct {
+		Text      string `json:"text"`
+		Fragments []struct {
+			Type      string      `json:"type"`
+			Text      string      `json:"text"`
+			Cheermote interface{} `json:"cheermote"`
+			Emote     interface{} `json:"emote"`
+			Mention   interface{} `json:"mention"`
+		} `json:"fragments"`
+	} `json:"message"`
+	Color  string `json:"color"`
+	Badges []struct {
+		SetId string `json:"set_id"`
+		Id    string `json:"id"`
+		Info  string `json:"info"`
+	} `json:"badges"`
+	MessageType                 string      `json:"message_type"`
+	Cheer                       interface{} `json:"cheer"`
+	Reply                       interface{} `json:"reply"`
+	ChannelPointsCustomRewardId interface{} `json:"channel_points_custom_reward_id"`
+	SourceBroadcasterUserId     interface{} `json:"source_broadcaster_user_id"`
+	SourceBroadcasterUserLogin  interface{} `json:"source_broadcaster_user_login"`
+	SourceBroadcasterUserName   interface{} `json:"source_broadcaster_user_name"`
+	SourceMessageId             interface{} `json:"source_message_id"`
+	SourceBadges                interface{} `json:"source_badges"`
+}

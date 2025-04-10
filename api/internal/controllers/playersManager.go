@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"net/http"
 	"sync"
@@ -12,7 +13,7 @@ import (
 
 type PlayersManager struct {
 	mutex      *sync.Mutex
-	clients    map[string][]*websocket.Conn
+	clients    map[string]map[string]*websocket.Conn
 	upgrader   websocket.Upgrader
 	eventSubs  map[string]*EventSub
 	apiWrapper *ApiWrapper
@@ -21,7 +22,7 @@ type PlayersManager struct {
 func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrapper) *PlayersManager {
 	return &PlayersManager{
 		mutex:   &sync.Mutex{},
-		clients: make(map[string][]*websocket.Conn),
+		clients: make(map[string]map[string]*websocket.Conn),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -32,7 +33,7 @@ func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrappe
 	}
 }
 
-func (pm *PlayersManager) GetConnFromTwitchId(twitchId string) []*websocket.Conn {
+func (pm *PlayersManager) GetConnFromTwitchId(twitchId string) map[string]*websocket.Conn {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
@@ -113,69 +114,75 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 		tokenCh <- token
 
 		if pm.clients[userInfo.ID] == nil {
-			pm.clients[userInfo.ID] = make([]*websocket.Conn, 0)
+			pm.clients[userInfo.ID] = make(map[string]*websocket.Conn, 0)
 		}
 
-		pm.clients[userInfo.ID] = append(pm.clients[userInfo.ID], conn)
+		connUuid := uuid.New().String()
+		pm.clients[userInfo.ID][connUuid] = conn
 
-		go pm.mainLoop(userInfo.ID)
+		go pm.mainLoop(userInfo.ID, connUuid)
 	}
 	pm.mutex.Unlock()
 }
 
-func (pm *PlayersManager) mainLoop(twitchId string) {
-	conn := pm.clients[twitchId]
+func (pm *PlayersManager) mainLoop(twitchId string, connUuid string) {
+	conn := pm.clients[twitchId][connUuid]
 	eventSub := pm.eventSubs[twitchId]
 
 	unsubscribeEvent := eventSub.notificationHandler.OnNewVideo(func(newVideo models.UsersVideos) {
-		for _, c := range conn {
-			err := c.WriteJSON(newVideo)
-			if err != nil {
-				payload := struct {
-					Error   string `json:"error"`
-					Message string `json:"message"`
-				}{
-					Error:   err.Error(),
-					Message: "An error occured when sending new video",
-				}
-
-				c.WriteJSON(payload)
-			}
-		}
-	})
-	unsubscribeError := eventSub.OnError(func(eventSubError error) {
-		for _, c := range conn {
+		err := conn.WriteJSON(newVideo)
+		if err != nil {
 			payload := struct {
 				Error   string `json:"error"`
 				Message string `json:"message"`
 			}{
-				Error:   eventSubError.Error(),
-				Message: "An error occured with Twitch event listener",
+				Error:   err.Error(),
+				Message: "An error occured when sending new video",
 			}
 
-			c.WriteJSON(payload)
+			conn.WriteJSON(payload)
 		}
 	})
+	unsubscribeError := eventSub.OnError(func(eventSubError error) {
+		payload := struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}{
+			Error:   eventSubError.Error(),
+			Message: "An error occured with Twitch event listener",
+		}
+
+		conn.WriteJSON(payload)
+	})
+	//unsubscribeMessage := eventSub.notificationHandler.OnChatMessage(func(message twitch.ChatMessageEvent) {
+	//	err := conn.WriteJSON(message)
+	//	if err != nil {
+	//		payload := struct {
+	//			Error   string `json:"error"`
+	//			Message string `json:"message"`
+	//		}{
+	//			Error:   err.Error(),
+	//			Message: "An error occured when sending new video",
+	//		}
+	//
+	//		conn.WriteJSON(payload)
+	//	}
+	//})
 
 	for {
-		for index, c := range conn {
-			err := c.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
-			if err != nil {
-				unsubscribeEvent()
-				unsubscribeError()
-				c.Close()
+		err := conn.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
+		if err != nil {
+			unsubscribeEvent()
+			unsubscribeError()
+			//unsubscribeMessage()
+			conn.Close()
 
-				pm.mutex.Lock()
-				if len(conn) > 1 {
-					conn = append(conn[:index], conn[index+1:]...)
-				} else {
-					delete(pm.clients, twitchId)
-				}
-				pm.mutex.Unlock()
+			pm.mutex.Lock()
+			delete(pm.clients[twitchId], connUuid)
+			pm.mutex.Unlock()
 
-				break
-			}
-			time.Sleep(5 * time.Second)
+			break
 		}
+		time.Sleep(5 * time.Second)
 	}
 }
