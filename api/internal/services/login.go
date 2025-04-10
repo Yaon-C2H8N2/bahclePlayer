@@ -33,6 +33,7 @@ func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
 	}
 
 	conn := utils.GetConnection()
+	defer conn.Release()
 	sql := `
 			SELECT users.user_id, users.twitch_id, users.username, users.token, users.token_created_at
 			FROM users

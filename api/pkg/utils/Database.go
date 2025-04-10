@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"os"
+	"time"
 )
 
 var Database *pgxpool.Pool
@@ -34,7 +35,8 @@ func InitDatabase() {
 }
 
 func GetConnection() *pgxpool.Conn {
-	conn, err := Database.Acquire(context.Background())
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(20*time.Second))
+	conn, err := Database.Acquire(ctx)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
@@ -44,7 +46,10 @@ func GetConnection() *pgxpool.Conn {
 }
 
 func DoRequest(conn *pgxpool.Conn, query string, args ...any) pgx.Rows {
-	rows, err := conn.Query(context.Background(), query, args...)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+
+	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query failed: %v\n", err)
 	}
