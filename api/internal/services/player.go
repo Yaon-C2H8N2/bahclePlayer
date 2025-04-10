@@ -20,7 +20,7 @@ func getPlaylistAndQueue(c *gin.Context) {
 	defer conn.Release()
 
 	sql := `
-			SELECT users_videos.*
+			SELECT users_videos.video_id, users_videos.user_id, users_videos.youtube_id, users_videos.url, users_videos.title, users_videos.duration, users_videos.type, users_videos.created_at, users_videos.thumbnail_url, users_videos.added_by
 			FROM users_videos
 			JOIN users ON users_videos.user_id = users.user_id
 			WHERE users.twitch_id = $1

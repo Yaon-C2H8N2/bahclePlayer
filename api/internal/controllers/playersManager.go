@@ -111,6 +111,11 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 
 	if token != "" {
 		tokenCh <- token
+
+		if pm.clients[userInfo.ID] == nil {
+			pm.clients[userInfo.ID] = make([]*websocket.Conn, 0)
+		}
+
 		pm.clients[userInfo.ID] = append(pm.clients[userInfo.ID], conn)
 
 		go pm.mainLoop(userInfo.ID)

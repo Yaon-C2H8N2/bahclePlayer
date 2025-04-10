@@ -82,6 +82,9 @@ export const Player = () => {
         }
 
         fetchApi("/api/playlist").then((res) => {
+            if(res.status === 401){
+                window.location.href = "/?error=token_expired"
+            }
             return res.json();
         }).then((data) => {
             const videos: any[] = data.data ?? [];

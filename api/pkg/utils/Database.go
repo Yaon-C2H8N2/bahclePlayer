@@ -62,7 +62,7 @@ func Migrate() {
 		os.Getenv("POSTGRES_DB"),
 	)
 
-	fmt.Println("Migrating database...")
+	fmt.Printf("Migrating database %s\n", connectionString)
 	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		log.Fatal(err)

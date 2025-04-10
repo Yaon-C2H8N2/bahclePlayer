@@ -2,21 +2,26 @@ import {Button} from "@/components/ui/button.tsx";
 import {LoaderCircle, Twitch} from "lucide-react";
 import {useEffect, useState} from "react";
 import {fetchApi} from "@/lib/network.ts";
+import {useToast} from "@/hooks/use-toast.ts";
 
 export const Home = () => {
     const [loading, setLoading] = useState(false)
     const [appInfo, setAppInfo] = useState<any>(null)
+    const toast = useToast()
 
     useEffect(() => {
         setLoading(true)
+        fetchApi("/api/appinfo").then((res) => {
+            return res.json()
+        }).then((data) => {
+            setAppInfo(data)
+            setLoading(false)
+        })
 
         const code = new URLSearchParams(window.location.search).get("code")
         const error = new URLSearchParams(window.location.search).get("error")
-        const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
 
-        if (token) {
-            window.location.href = "/player"
-        } else if (code && !token) {
+        if (code) {
             setLoading(true)
             fetchApi(`/api/login`, {method: "POST", body: JSON.stringify({code})})
                 .then((response) => response.json())
@@ -28,15 +33,12 @@ export const Home = () => {
                 })
         } else if (error) {
             console.error(error)
-            //TODO: Show error
+            toast.toast({
+                title: "Error",
+                description: error === "token_expired" ? "Token expired" : error,
+                variant: "destructive",
+            })
         }
-
-        fetchApi("/api/appinfo").then((res) => {
-            return res.json()
-        }).then((data) => {
-            setAppInfo(data)
-            setLoading(false)
-        })
     }, [])
 
     return (

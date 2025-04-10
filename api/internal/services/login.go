@@ -25,7 +25,7 @@ func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
 
 	userInfo, err := aw.GetUserInfoFromToken(token)
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(401, gin.H{
 			"error": err.Error(),
 		})
 		c.Abort()
@@ -82,6 +82,13 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 		`
 	rows := utils.DoRequest(conn, sql, loginRequest.Code)
 	var user models.Users
+	err = rows.Err()
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
 	if !rows.Next() {
 		c.JSON(401, gin.H{
 			"error": "A token request with this code already exists",
@@ -118,11 +125,11 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 				INSERT INTO users (twitch_id, username, token, token_created_at)
 				VALUES ($1, $2, $3, now())
 				ON CONFLICT (twitch_id) DO UPDATE SET token = $3, token_created_at = now()
-				RETURNING twitch_id, username, token, token_created_at
+				RETURNING user_id, twitch_id, username, token, token_created_at
 			`
 		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName, userToken)
 		rows.Next()
-		err = rows.Scan(&user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+		err = rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
 
 		if err != nil {
 			c.JSON(500, gin.H{
