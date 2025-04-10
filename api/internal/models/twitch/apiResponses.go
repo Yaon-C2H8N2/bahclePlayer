@@ -18,24 +18,26 @@ type UserInfo struct {
 	ViewCount       int    `json:"view_count"`
 }
 
+type SubscriptionInfo struct {
+	ID        string `json:"id"`
+	Status    string `json:"status"`
+	Type      string `json:"type"`
+	Version   string `json:"version"`
+	Condition any    `json:"condition"`
+	Transport struct {
+		Method     string `json:"method"`
+		Callback   string `json:"callback"`
+		Secret     string `json:"secret"`
+		SesssionId string `json:"session_id"`
+	} `json:"transport"`
+	CreatedAt string `json:"created_at"`
+}
+
 type SubscriptionResponse struct {
-	Data []struct {
-		ID        string `json:"id"`
-		Status    string `json:"status"`
-		Type      string `json:"type"`
-		Version   string `json:"version"`
-		Condition any    `json:"condition"`
-		Transport struct {
-			Method     string `json:"method"`
-			Callback   string `json:"callback"`
-			Secret     string `json:"secret"`
-			SesssionId string `json:"session_id"`
-		} `json:"transport"`
-		CreatedAt string `json:"created_at"`
-	} `json:"data"`
-	Total        int `json:"total"`
-	TotalCost    int `json:"total_cost"`
-	MaxTotalCost int `json:"max_total_cost"`
+	Data         []SubscriptionInfo `json:"data"`
+	Total        int                `json:"total"`
+	TotalCost    int                `json:"total_cost"`
+	MaxTotalCost int                `json:"max_total_cost"`
 }
 
 type TokenResponse struct {

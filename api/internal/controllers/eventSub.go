@@ -116,8 +116,95 @@ func (es *EventSub) OnStarted(callback func()) func() {
 	}
 }
 
+func (es *EventSub) GetAllSubscriptionsForUser(user twitch.UserInfo, userToken string) (twitch.SubscriptionResponse, error) {
+	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
+	httpClient := &http.Client{}
+
+	req, err := http.NewRequest("GET", twitchUrl+"?user_id="+user.ID, nil)
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return twitch.SubscriptionResponse{}, err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		fmt.Println("Error making request:", err)
+		return twitch.SubscriptionResponse{}, err
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return twitch.SubscriptionResponse{}, err
+	}
+
+	subscriptionResponse := &twitch.SubscriptionResponse{}
+	err = json.Unmarshal(body, subscriptionResponse)
+	if err != nil {
+		fmt.Println("Error unmarshalling response:", err)
+		return twitch.SubscriptionResponse{}, err
+	}
+	return *subscriptionResponse, nil
+}
+
 func (es *EventSub) DropAllSubscriptions(userToken string) {
-	//TODO: Implement
+	user, err := es.apiWrapper.GetUserInfoFromToken(userToken)
+	if err != nil {
+		fmt.Println("Error getting broadcaster ID:", err)
+		return
+	}
+
+	subscriptionResponse, err := es.GetAllSubscriptionsForUser(user, userToken)
+	if err != nil {
+		fmt.Println("Error getting all subscriptions:", err)
+		return
+	}
+
+	fmt.Printf("eventSub[%s] dropping %d subscriptions\n", es.user.Username, len(subscriptionResponse.Data))
+	for _, subscription := range subscriptionResponse.Data {
+		if subscription.Status == "enabled" {
+			err = es.unsubscribeFromEvent(userToken, subscription.ID)
+			if err != nil {
+				fmt.Println("Error unsubscribing from event:", err)
+			}
+		}
+	}
+}
+
+func (es *EventSub) unsubscribeFromEvent(userToken string, subscriptionId string) error {
+	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("DELETE", twitchUrl+"?id="+subscriptionId, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return err
+	}
+
+	if res.StatusCode != 204 {
+		return fmt.Errorf("failed to unsubscribe from event: %s\nResponse body: %s", res.Status, string(body))
+	}
+	return nil
 }
 
 func (es *EventSub) InitSubscriptions(userToken string) {
