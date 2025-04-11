@@ -109,7 +109,6 @@ export const Player = () => {
     const handleNextVideo = () => {
         if(currentVideo.type === "QUEUE") {
             const newQueue = queue.filter((video: any) => video.video_id !== currentVideo.video_id)
-            setQueue(newQueue)
             removeVideo(currentVideo, true)
             if(newQueue.length > 0){
                 setCurrentVideo(newQueue[0])
@@ -118,12 +117,28 @@ export const Player = () => {
                 setCurrentVideo(playlist[(playlistIndex + 1)%playlist.length])
             }
         } else {
-            setPlaylistIndex((playlistIndex + 1)%playlist.length)
-            setCurrentVideo(playlist[(playlistIndex + 1)%playlist.length])
+            if (queue.length > 0) {
+                setCurrentVideo(queue[0])
+            } else {
+                setPlaylistIndex((playlistIndex + 1)%playlist.length)
+                setCurrentVideo(playlist[(playlistIndex + 1)%playlist.length])
+            }
         }
     }
 
     const removeVideo = (video: any, auto: boolean) => {
+        if (video.type === "QUEUE") {
+            const newQueue = queue.filter((v: any) => v.video_id !== video.video_id)
+            setQueue(newQueue)
+            removeVideoFromApi(video, auto)
+        } else {
+            const newPlaylist = playlist.filter((v: any) => v.video_id !== video.video_id)
+            setPlaylist(newPlaylist)
+            removeVideoFromApi(video, auto)
+        }
+    }
+
+    const removeVideoFromApi = (video: any, auto: boolean) => {
         fetchApi(`/api/playlist?video_id=${video.video_id}`, {method: "DELETE"})
             .then((res) => {
                 return res.json()
