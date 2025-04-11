@@ -25,6 +25,7 @@ func main() {
 		TwitchClientId: os.Getenv("TWITCH_CLIENT_ID"),
 		AppUrl:         os.Getenv("APP_URL"),
 		Started:        false,
+		Version:        os.Getenv("APP_VERSION"),
 	}
 
 	appToken, appTokenErr := controllers.RequestAppToken(appStatus.AppUrl, os.Getenv("TWITCH_CLIENT_SECRET"))
