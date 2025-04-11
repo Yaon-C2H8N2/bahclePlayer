@@ -124,7 +124,7 @@ export const Player = () => {
     }
 
     const removeVideo = (video: any, auto: boolean) => {
-        fetchApi("/api/playlist", {method: "DELETE", body: JSON.stringify({video_id: video.video_id})})
+        fetchApi(`/api/playlist?video_id=${video.video_id}`, {method: "DELETE"})
             .then((res) => {
                 return res.json()
             }
