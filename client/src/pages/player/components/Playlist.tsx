@@ -3,16 +3,16 @@ import {Play, Trash} from "lucide-react";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion.tsx";
 
 interface IPlaylistProps {
-    playlist: any[]
-    queue: any[]
-    currentlyPlaying?: any
-    onRemoveVideo?: (video: any) => void
+    playlist: Video[]
+    queue: Video[]
+    currentlyPlaying?: Video
+    onRemoveVideo?: (video: Video) => void
 }
 
 interface IVideoCardProps {
-    video: any
+    video: Video
     isPlaying?: boolean
-    onRemove?: (video: any) => void
+    onRemove?: (video: Video) => void
 }
 
 const VideoCard = (props: IVideoCardProps) => {
@@ -42,7 +42,7 @@ export const Playlist = (props: IPlaylistProps) => {
                     <AccordionTrigger>Queue{props.queue.length > 0 && " - ("+props.queue.length+" tracks)"}</AccordionTrigger>
                     <AccordionContent>
                         {props.queue.length === 0 && <div>Queue is empty</div>}
-                        {props.queue.map((video: any) => {
+                        {props.queue.map((video) => {
                             return (
                                 <VideoCard key={video.video_id} video={video} isPlaying={props?.currentlyPlaying === video} onRemove={props.onRemoveVideo}/>
                             )
@@ -55,7 +55,7 @@ export const Playlist = (props: IPlaylistProps) => {
                     <AccordionTrigger>Playlist{props.playlist.length > 0 && " - (" + props.playlist.length + " tracks)"}</AccordionTrigger>
                     <AccordionContent>
                         {props.playlist.length === 0 && <div>Playlist is empty</div>}
-                        {props.playlist.map((video: any) => {
+                        {props.playlist.map((video) => {
                             return (
                                 <VideoCard key={video.video_id} video={video} isPlaying={props?.currentlyPlaying === video} onRemove={props.onRemoveVideo}/>
                             )

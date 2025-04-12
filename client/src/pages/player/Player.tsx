@@ -9,9 +9,9 @@ import {ManualAddDialog} from "@/pages/player/components/ManualAddDialog.tsx";
 
 
 export const Player = () => {
-    const [playlist, setPlaylist] = useState<any>([])
-    const [queue, setQueue] = useState<any>([])
-    const [currentVideo, setCurrentVideo] = useState<any>(null)
+    const [playlist, setPlaylist] = useState<Video[]>([])
+    const [queue, setQueue] = useState<Video[]>([])
+    const [currentVideo, setCurrentVideo] = useState<Video | undefined>(undefined)
     const [playlistIndex, setPlaylistIndex] = useState<number>(-1)
     const [openManualAdd, setOpenManualAdd] = useState<boolean>(false)
     const toast = useToast()
@@ -29,16 +29,16 @@ export const Player = () => {
         return `${minutes}:${formattedSeconds}`;
     }
 
-    const addToQueue = (video: any) => {
-        setQueue((prev: any[]) => [video, ...prev])
+    const addToQueue = (video: Video) => {
+        setQueue((prev) => [video, ...prev])
     }
 
-    const addToPlaylist = (video: any) => {
-        setPlaylist((prev: any[]) => [video, ...prev])
+    const addToPlaylist = (video: Video) => {
+        setPlaylist((prev) => [video, ...prev])
     }
 
-    const initSocket = (playlistCallback: (video: any) => void, queueCallback: (video: any) => void) => {
-           let socket = async (playlistCallback: (video: any) => void, queueCallback: (video: any) => void) => {
+    const initSocket = (playlistCallback: (video: Video) => void, queueCallback: (video: Video) => void) => {
+           let socket = async (playlistCallback: (video: Video) => void, queueCallback: (video: Video) => void) => {
                 const token = document.cookie.split(";").find(cookie => cookie.includes("token"))?.split("=")[1];
                 const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
                 const ws = new WebSocket(`${wsProtocol}://${window.location.host}/api/player`);
@@ -87,7 +87,7 @@ export const Player = () => {
             }
             return res.json();
         }).then((data) => {
-            const videos: any[] = data.data ?? [];
+            const videos: Video[] = data.data ?? [];
             videos.forEach((video) => {
                 video.duration = formatISODuration(video.duration)
             })
@@ -107,8 +107,8 @@ export const Player = () => {
     }, [])
 
     const handleNextVideo = () => {
-        if(currentVideo.type === "QUEUE") {
-            const newQueue = queue.filter((video: any) => video.video_id !== currentVideo.video_id)
+        if(currentVideo?.type === "QUEUE") {
+            const newQueue = queue.filter((video) => video.video_id !== currentVideo.video_id)
             removeVideo(currentVideo, true)
             if(newQueue.length > 0){
                 setCurrentVideo(newQueue[0])
@@ -126,19 +126,19 @@ export const Player = () => {
         }
     }
 
-    const removeVideo = (video: any, auto: boolean) => {
+    const removeVideo = (video: Video, auto: boolean) => {
         if (video.type === "QUEUE") {
-            const newQueue = queue.filter((v: any) => v.video_id !== video.video_id)
+            const newQueue = queue.filter((v) => v.video_id !== video.video_id)
             setQueue(newQueue)
             removeVideoFromApi(video, auto)
         } else {
-            const newPlaylist = playlist.filter((v: any) => v.video_id !== video.video_id)
+            const newPlaylist = playlist.filter((v) => v.video_id !== video.video_id)
             setPlaylist(newPlaylist)
             removeVideoFromApi(video, auto)
         }
     }
 
-    const removeVideoFromApi = (video: any, auto: boolean) => {
+    const removeVideoFromApi = (video: Video, auto: boolean) => {
         fetchApi(`/api/playlist?video_id=${video.video_id}`, {method: "DELETE"})
             .then((res) => {
                 return res.json()
