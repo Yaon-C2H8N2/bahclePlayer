@@ -113,16 +113,34 @@ export const Player = () => {
             if(newQueue.length > 0){
                 setCurrentVideo(newQueue[0])
             } else {
-                setPlaylistIndex((playlistIndex + 1)%playlist.length)
-                setCurrentVideo(playlist[(playlistIndex + 1)%playlist.length])
+                handleNextPlaylistVideo()
             }
         } else {
             if (queue.length > 0) {
                 setCurrentVideo(queue[0])
             } else {
-                setPlaylistIndex((playlistIndex + 1)%playlist.length)
-                setCurrentVideo(playlist[(playlistIndex + 1)%playlist.length])
+                handleNextPlaylistVideo()
             }
+        }
+    }
+
+    const handleNextPlaylistVideo = () => {
+        if(currentVideo){
+            let newVideoIndex = (playlistIndex + 1)%playlist.length
+
+            if(JSON.stringify(currentVideo) !== JSON.stringify(playlist[playlistIndex])) {
+                const currentVideoIndex = playlist.findIndex((video) => video.video_id === currentVideo.video_id)
+
+                if(currentVideoIndex !== -1){
+                    newVideoIndex = (currentVideoIndex)%playlist.length
+                }
+            }
+
+            setPlaylistIndex(newVideoIndex)
+            setCurrentVideo(playlist[newVideoIndex])
+        } else {
+            setCurrentVideo(playlist[0])
+            setPlaylistIndex(0)
         }
     }
 
