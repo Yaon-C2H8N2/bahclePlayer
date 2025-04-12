@@ -44,6 +44,8 @@ func (pm *PlayersManager) GetConnFromTwitchId(twitchId string) map[string]*webso
 
 func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	conn, err := pm.upgrader.Upgrade(c.Writer, c.Request, nil)
+	socketLock := &sync.Mutex{}
+
 	if err != nil {
 		c.JSON(500, gin.H{
 			"message": "Failed to upgrade connection",
@@ -64,21 +66,41 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 				Message: "No message received before timeout",
 			}
 
+			socketLock.Lock()
 			conn.WriteJSON(payload)
 			conn.Close()
+			socketLock.Unlock()
 			break
 		case <-tokenCh:
 			break
 		}
 	}()
 
-	pm.mutex.Lock()
-	welcome := struct {
-		Welcome string `json:"welcome"`
-	}{
-		Welcome: "Socket connection established",
-	}
-	conn.WriteJSON(welcome)
+	stopWelcome := make(chan struct{})
+	go func() {
+		welcome := struct {
+			Welcome string `json:"welcome"`
+		}{
+			Welcome: "Socket connection established",
+		}
+
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-stopWelcome:
+				return
+			case <-ticker.C:
+				socketLock.Lock()
+				err := conn.WriteJSON(welcome)
+				socketLock.Unlock()
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
 
 	_, messageBytes, err := conn.ReadMessage()
 	if err != nil {
@@ -105,13 +127,17 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 			Error:   err.Error(),
 			Message: "An error occured when getting user info",
 		}
+		socketLock.Lock()
 		conn.WriteJSON(payload)
 		conn.Close()
+		socketLock.Unlock()
 		return
 	}
 
+	pm.mutex.Lock()
 	if token != "" {
 		tokenCh <- token
+		close(stopWelcome)
 
 		if pm.clients[userInfo.ID] == nil {
 			pm.clients[userInfo.ID] = make(map[string]*websocket.Conn, 0)
