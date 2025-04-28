@@ -34,4 +34,7 @@ func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controlle
 	router.GET("/appinfo", func(c *gin.Context) {
 		c.JSON(200, status)
 	})
+	router.GET("/overlays", func(c *gin.Context) {
+		getOverlays(c)
+	})
 }
