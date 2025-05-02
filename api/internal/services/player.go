@@ -32,13 +32,13 @@ func getPlaylistAndQueue(c *gin.Context) {
 	for rows.Next() {
 		var result models.UsersVideos
 		err = rows.Scan(&result.VideoId, &result.UserId, &result.YoutubeId, &result.Url, &result.Title, &result.Duration, &result.Type, &result.CreatedAt, &result.ThumbnailUrl, &result.AddedBy)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
 		results = append(results, result)
-	}
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
-		})
-		return
 	}
 
 	c.JSON(200, gin.H{

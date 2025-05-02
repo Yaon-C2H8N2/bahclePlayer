@@ -46,8 +46,7 @@ func GetConnection() *pgxpool.Conn {
 }
 
 func DoRequest(conn *pgxpool.Conn, query string, args ...any) pgx.Rows {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
-	defer cancel()
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 
 	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
