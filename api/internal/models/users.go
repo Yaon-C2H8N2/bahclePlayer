@@ -64,11 +64,11 @@ func AddOrUpdateUser(user Users, userToken twitch.UserTokenResponse) (Users, err
 				INSERT INTO users (twitch_id, username, token, token_created_at, token_expires_at, refresh_token)
 				VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT (twitch_id) DO UPDATE SET token = $3, token_created_at = $4, token_expires_at = $5, refresh_token = $6
-				RETURNING user_id, twitch_id, username, token, token_created_at
+				RETURNING user_id, twitch_id, username, token, token_created_at, token_expires_at, refresh_token
 			`
 	rows := utils.DoRequest(conn, sql, user.TwitchId, user.Username, userToken.AccessToken, time.Now(), time.Now().Add(time.Duration(userToken.ExpiresIn)*time.Second), userToken.RefreshToken)
 	rows.Next()
-	err := rows.Scan(&resultUser.UserId, &resultUser.TwitchId, &resultUser.Username, &resultUser.Token, &resultUser.TokenCreatedAt)
+	err := rows.Scan(&resultUser.UserId, &resultUser.TwitchId, &resultUser.Username, &resultUser.Token, &resultUser.TokenCreatedAt, &resultUser.TokenExpiresAt, &resultUser.RefreshToken)
 
 	if err != nil {
 		return Users{}, err
