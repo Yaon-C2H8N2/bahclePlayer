@@ -33,6 +33,31 @@ jobs:
           tags: ghcr.io/${{ env.REPO }}/bahcleplayer-api:${{ github.event.inputs.image_version }},ghcr.io/${{ env.REPO }}/bahcleplayer-api:latest
           push: 'true'
 
+  build-valkey:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setting up job
+        run: |
+          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build API Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/valkey/Dockerfile
+          tags: ghcr.io/${{ env.REPO }}/bahcleplayer-valkey:${{ github.event.inputs.image_version }},ghcr.io/${{ env.REPO }}/bahcleplayer-valkey:latest
+          push: 'true'
+
   build-client:
     runs-on: ubuntu-latest
 
@@ -59,7 +84,7 @@ jobs:
           push: 'true'
 
   finalize:
-    needs: [build-api, build-client]
+    needs: [build-api, build-client, build-valkey]
     runs-on: ubuntu-latest
 
     steps:
