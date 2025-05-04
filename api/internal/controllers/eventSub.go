@@ -49,8 +49,24 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 		es, err := GetEventSub(apiWrapper, user.Token)
 
 		if err != nil {
-			fmt.Printf("Error getting event sub for user %s: %s\n", user.Username, err)
-			continue
+			tokenResponse, err := RefreshUserToken(user.RefreshToken)
+			if err != nil {
+				fmt.Printf("Error refreshing token for user %s: %s\n", user.Username, err)
+				continue
+			}
+			fmt.Printf("Refreshing token for user %s\n", user.Username)
+
+			user, err = models.AddOrUpdateUser(user, *tokenResponse)
+			if err != nil {
+				fmt.Printf("Error updating user %s: %s\n", user.Username, err)
+				continue
+			}
+
+			es, err = GetEventSub(apiWrapper, user.Token)
+			if err != nil {
+				fmt.Printf("Error getting event sub for user %s: %s\n", user.Username, err)
+				continue
+			}
 		}
 
 		es.user = user
