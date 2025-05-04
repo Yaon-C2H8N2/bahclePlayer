@@ -11,11 +11,12 @@ The project leverages the following APIs:
 
 ## Features
 
-- Login with your Twitch account.
-- Set up which channel Rewards you want to use and how (directly add to the queue or create a poll that needs to be
+- [x] Login with your Twitch account.
+- [x] Set up which channel Rewards you want to use and how (directly add to the queue or create a poll that needs to be
   validated) through the settings menu.
-- Auto refund the channel points if the song is not found.
-- Manage the queue and playlist (skip, remove, manually add songs).
+- [x] Auto refund the channel points if the song is not found.
+- [x] Manage the queue and playlist (skip, remove, manually add songs).
+- [ ] Customizable overlays to display the current song and the queue on your stream.
 
 ## Technologies
 - [React](https://reactjs.org/) for the frontend.
@@ -24,6 +25,7 @@ The project leverages the following APIs:
 - [Gin](https://gin-gonic.com) for the backend Rest API.
 - [Gorilla Websocket](https://gorilla.github.io) for the API websocket connections.
 - [PostgreSQL](https://www.postgresql.org/) for the database.
+- [Valkey](https://valkey.io) to enable Pub/Sub patterns for the backend and to schedule tasks.
 
 ## Installation
 
