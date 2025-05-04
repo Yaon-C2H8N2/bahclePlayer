@@ -41,7 +41,7 @@ func GetUserFromToken(token string) (Users, error) {
 	conn := utils.GetConnection()
 	defer conn.Release()
 	sql := `
-			SELECT users.user_id, users.twitch_id, users.username, users.token, users.token_created_at
+			SELECT users.user_id, users.twitch_id, users.username, users.token, users.token_created_at, users.token_expires_at, users.refresh_token
 			FROM users
 			WHERE token = $1
 		`
@@ -49,7 +49,7 @@ func GetUserFromToken(token string) (Users, error) {
 	if !rows.Next() {
 		return Users{}, nil
 	}
-	err := rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+	err := rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt, &user.TokenExpiresAt, &user.RefreshToken)
 	if err != nil {
 		return Users{}, err
 	}
