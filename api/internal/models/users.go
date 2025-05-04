@@ -16,6 +16,26 @@ type Users struct {
 	RefreshToken   string    `json:"refresh_token"`
 }
 
+func GetRefreshTokenFromToken(token string) (string, error) {
+	conn := utils.GetConnection()
+	defer conn.Release()
+	sql := `
+			SELECT refresh_token
+			FROM users
+			WHERE token = $1
+		`
+	rows := utils.DoRequest(conn, sql, token)
+	if !rows.Next() {
+		return "", nil
+	}
+	var refreshToken string
+	err := rows.Scan(&refreshToken)
+	if err != nil {
+		return "", err
+	}
+	return refreshToken, nil
+}
+
 func GetUserFromToken(token string) (Users, error) {
 	var user Users
 	conn := utils.GetConnection()
@@ -48,7 +68,7 @@ func AddOrUpdateUser(user Users, userToken twitch.UserTokenResponse) (Users, err
 			`
 	rows := utils.DoRequest(conn, sql, user.TwitchId, user.Username, userToken.AccessToken, time.Now(), time.Now().Add(time.Duration(userToken.ExpiresIn)*time.Second), userToken.RefreshToken)
 	rows.Next()
-	err := rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+	err := rows.Scan(&resultUser.UserId, &resultUser.TwitchId, &resultUser.Username, &resultUser.Token, &resultUser.TokenCreatedAt)
 
 	if err != nil {
 		return Users{}, err

@@ -37,7 +37,7 @@ func main() {
 			oldToken := msg.Payload[len("auth:token:"):]
 
 			fmt.Println("Token expired:", oldToken)
-			userRefreshToken, err := valkeyClient.HGet(context.Background(), msg.Payload, "refresh_token").Result()
+			userRefreshToken, err := models.GetRefreshTokenFromToken(oldToken)
 			if err != nil {
 				fmt.Println("Error getting token:", err)
 				continue
@@ -55,6 +55,7 @@ func main() {
 				continue
 			}
 		}
+		fmt.Println("Keyevent listener stopped")
 	}()
 
 	appStatus := models.AppStatus{
