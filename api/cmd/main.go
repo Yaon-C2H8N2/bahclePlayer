@@ -37,18 +37,17 @@ func main() {
 			oldToken := msg.Payload[len("auth:token:"):]
 
 			fmt.Println("Token expired:", oldToken)
-			userRefreshToken, err := models.GetRefreshTokenFromToken(oldToken)
+			user, err := models.GetUserFromToken(oldToken)
 			if err != nil {
 				fmt.Println("Error getting token:", err)
 				continue
 			}
-			refreshedToken, err := controllers.RefreshUserToken(userRefreshToken)
+			refreshedToken, err := controllers.RefreshUserToken(user.RefreshToken)
 			if err != nil {
 				fmt.Println("Error refreshing token:", err)
 				continue
 			}
 
-			user, err := models.GetUserFromToken(oldToken)
 			_, err = models.AddOrUpdateUser(user, *refreshedToken)
 			if err != nil {
 				fmt.Println("Error updating user:", err)

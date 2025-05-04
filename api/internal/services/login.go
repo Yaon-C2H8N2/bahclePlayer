@@ -23,7 +23,16 @@ func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
 	}
 	token = token[7:]
 
-	userInfo, err := aw.GetUserInfoFromToken(token)
+	parsedToken, err := models.ValidateToken(token)
+	if err != nil {
+		c.JSON(401, gin.H{
+			"error": err.Error(),
+		})
+		c.Abort()
+		return
+	}
+	tokenClaims := parsedToken.Claims.(*models.JWTClaims)
+	user, err := models.GetUserFromUserId(tokenClaims.UserId)
 	if err != nil {
 		c.JSON(401, gin.H{
 			"error": err.Error(),
@@ -32,26 +41,9 @@ func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
 		return
 	}
 
-	conn := utils.GetConnection()
-	defer conn.Release()
-	sql := `
-			SELECT users.user_id, users.twitch_id, users.username, users.token, users.token_created_at
-			FROM users
-			WHERE twitch_id = $1
-		`
-	rows := utils.DoRequest(conn, sql, userInfo.ID)
-	var user models.Users
-	if !rows.Next() {
-		c.JSON(401, gin.H{
-			"error": "User not found",
-		})
-		c.Abort()
-		return
-	}
-
-	err = rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+	userInfo, err := aw.GetUserInfoFromToken(user.Token)
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(401, gin.H{
 			"error": err.Error(),
 		})
 		c.Abort()
@@ -152,9 +144,17 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 		eventSubs[user.TwitchId] = es
 	}
 
-	c.Header("Set-Cookie", "token="+user.Token+"; Path=/;")
+	jwtToken, err := models.GenerateToken(user)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.Header("Set-Cookie", "token="+jwtToken+"; Path=/;")
 	c.JSON(200, gin.H{
-		"token": user.Token,
+		"token": jwtToken,
 		"user":  user,
 	})
 }

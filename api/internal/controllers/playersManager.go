@@ -118,7 +118,40 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	json.Unmarshal(messageBytes, &message)
 	token := message.Token
 
-	userInfo, err := pm.apiWrapper.GetUserInfoFromToken(token)
+	jwtToken, err := models.ValidateToken(token)
+	if err != nil {
+		payload := struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}{
+			Error:   err.Error(),
+			Message: "An error occured when validating token",
+		}
+		socketLock.Lock()
+		conn.WriteJSON(payload)
+		conn.Close()
+		socketLock.Unlock()
+		return
+	}
+
+	tokenClaims := jwtToken.Claims.(*models.JWTClaims)
+	user, err := models.GetUserFromUserId(tokenClaims.UserId)
+	if err != nil {
+		payload := struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}{
+			Error:   err.Error(),
+			Message: "An error occured when getting user from token",
+		}
+		socketLock.Lock()
+		conn.WriteJSON(payload)
+		conn.Close()
+		socketLock.Unlock()
+		return
+	}
+
+	userInfo, err := pm.apiWrapper.GetUserInfoFromToken(user.Token)
 	if err != nil {
 		payload := struct {
 			Error   string `json:"error"`
