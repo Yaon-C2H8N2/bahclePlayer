@@ -112,7 +112,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 		`
 		utils.DoRequest(conn, sql, loginRequest.Code)
 
-		userInfo, err := aw.GetUserInfoFromToken(userToken)
+		userInfo, err := aw.GetUserInfoFromToken(userToken.AccessToken)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": err.Error(),
@@ -120,17 +120,13 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 			return
 		}
 		conn.Release()
-		conn = utils.GetConnection()
-		defer conn.Release()
-		sql = `
-				INSERT INTO users (twitch_id, username, token, token_created_at)
-				VALUES ($1, $2, $3, now())
-				ON CONFLICT (twitch_id) DO UPDATE SET token = $3, token_created_at = now()
-				RETURNING user_id, twitch_id, username, token, token_created_at
-			`
-		rows = utils.DoRequest(conn, sql, userInfo.ID, userInfo.DisplayName, userToken)
-		rows.Next()
-		err = rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt)
+
+		user, err = models.AddOrUpdateUser(models.Users{
+			Username:     userInfo.DisplayName,
+			TwitchId:     userInfo.ID,
+			Token:        userToken.AccessToken,
+			RefreshToken: userToken.RefreshToken,
+		}, *userToken)
 
 		if err != nil {
 			c.JSON(500, gin.H{

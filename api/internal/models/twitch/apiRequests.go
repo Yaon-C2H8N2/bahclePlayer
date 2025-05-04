@@ -34,10 +34,19 @@ type PollCreateRequest struct {
 	Duration                   int  `json:"duration"`
 }
 
-type TokenFromCodeRequest struct {
+type TokenRequest struct {
 	ClientId     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
-	Code         string `json:"code"`
 	GrantType    string `json:"grant_type"`
-	RedirectUri  string `json:"redirect_uri"`
+}
+
+type TokenFromCodeRequest struct {
+	TokenRequest
+	Code        string `json:"code"`
+	RedirectUri string `json:"redirect_uri"`
+}
+
+type TokenFromRefreshRequest struct {
+	TokenRequest
+	RefreshToken string `json:"refresh_token"`
 }

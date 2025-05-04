@@ -1,13 +1,16 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type ApiWrapper struct {
@@ -59,48 +62,122 @@ func RequestAppToken(clientId string, clientSecret string) (string, error) {
 	return tokenResponse.AccessToken, nil
 }
 
-func RequestUserToken(code string) (string, error) {
+func cacheToken(token *twitch.UserTokenResponse) error {
+	key := "auth:token:" + token.AccessToken
+	ctx := context.Background()
+	rdb := utils.GetValkeyClient()
+
+	err := rdb.HSet(ctx, key, map[string]interface{}{
+		"token":         token.AccessToken,
+		"refresh_token": token.RefreshToken,
+		"expiry":        token.ExpiresIn,
+	}).Err()
+
+	if err != nil {
+		return err
+	}
+
+	return rdb.Expire(ctx, key, 3*time.Hour).Err()
+}
+
+func RequestUserToken(code string) (*twitch.UserTokenResponse, error) {
 	twitchUrl := "https://id.twitch.tv/oauth2/token"
 	appUrl := os.Getenv("APP_URL")
 	clientId := os.Getenv("TWITCH_CLIENT_ID")
 	clientSecret := os.Getenv("TWITCH_CLIENT_SECRET")
 
 	request := &twitch.TokenFromCodeRequest{
-		ClientId:     clientId,
-		ClientSecret: clientSecret,
-		Code:         code,
-		GrantType:    "authorization_code",
-		RedirectUri:  appUrl,
+		TokenRequest: twitch.TokenRequest{
+			ClientId:     clientId,
+			ClientSecret: clientSecret,
+			GrantType:    "authorization_code",
+		},
+		Code:        code,
+		RedirectUri: appUrl,
 	}
 	requestBody := strings.NewReader("client_id=" + request.ClientId + "&client_secret=" + request.ClientSecret + "&code=" + request.Code + "&grant_type=" + request.GrantType + "&redirect_uri=" + request.RedirectUri)
 
 	httpClient := &http.Client{}
 	req, err := http.NewRequest("POST", twitchUrl, requestBody)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var tokenResponse = &twitch.UserTokenResponse{}
 	err = json.Unmarshal(body, tokenResponse)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return tokenResponse.AccessToken, nil
+	err = cacheToken(tokenResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return tokenResponse, nil
+}
+
+func RefreshUserToken(refreshToken string) (*twitch.UserTokenResponse, error) {
+	twitchUrl := "https://id.twitch.tv/oauth2/token"
+	clientId := os.Getenv("TWITCH_CLIENT_ID")
+	clientSecret := os.Getenv("TWITCH_CLIENT_SECRET")
+
+	request := &twitch.TokenFromRefreshRequest{
+		TokenRequest: twitch.TokenRequest{
+			ClientId:     clientId,
+			ClientSecret: clientSecret,
+			GrantType:    "refresh_token",
+		},
+		RefreshToken: refreshToken,
+	}
+	requestBody := strings.NewReader("client_id=" + request.ClientId + "&client_secret=" + request.ClientSecret + "&grant_type=" + request.GrantType + "&refresh_token=" + request.RefreshToken)
+
+	httpClient := &http.Client{}
+	req, err := http.NewRequest("POST", twitchUrl, requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var tokenResponse = &twitch.UserTokenResponse{}
+	err = json.Unmarshal(body, tokenResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	err = cacheToken(tokenResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return tokenResponse, nil
 }
 
 func (aw *ApiWrapper) GetUserInfoFromToken(userToken string) (twitch.UserInfo, error) {
