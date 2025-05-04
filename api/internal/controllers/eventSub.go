@@ -116,6 +116,14 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
+func (es *EventSub) UpdateUser(user models.Users) {
+	es.user = user
+
+	es.DropAllSubscriptions(user.Token)
+	es.InitSubscriptions(user.Token)
+	es.listenToMessages()
+}
+
 func (es *EventSub) OnError(callback func(err error)) func() {
 	es.onError = callback
 

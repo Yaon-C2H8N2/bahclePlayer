@@ -28,35 +28,6 @@ func main() {
 	sub := valkeyClient.PSubscribe(context.Background(), "__keyevent@0__:expired")
 	fmt.Println("Subscribed to keyevent:expired")
 
-	go func() {
-		for msg := range sub.Channel() {
-			if !strings.HasPrefix(msg.Payload, "auth:token:") {
-				continue
-			}
-
-			oldToken := msg.Payload[len("auth:token:"):]
-
-			fmt.Println("Token expired:", oldToken)
-			user, err := models.GetUserFromToken(oldToken)
-			if err != nil {
-				fmt.Println("Error getting token:", err)
-				continue
-			}
-			refreshedToken, err := controllers.RefreshUserToken(user.RefreshToken)
-			if err != nil {
-				fmt.Println("Error refreshing token:", err)
-				continue
-			}
-
-			_, err = models.AddOrUpdateUser(user, *refreshedToken)
-			if err != nil {
-				fmt.Println("Error updating user:", err)
-				continue
-			}
-		}
-		fmt.Println("Keyevent listener stopped")
-	}()
-
 	appStatus := models.AppStatus{
 		TwitchClientId: os.Getenv("TWITCH_CLIENT_ID"),
 		AppUrl:         os.Getenv("APP_URL"),
@@ -81,6 +52,37 @@ func main() {
 		services.AuthMiddleware(c, apiWrapper)
 	})
 	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
+
+	go func() {
+		for msg := range sub.Channel() {
+			if !strings.HasPrefix(msg.Payload, "auth:token:") {
+				continue
+			}
+
+			oldToken := msg.Payload[len("auth:token:"):]
+
+			fmt.Println("Token expired:", oldToken)
+			user, err := models.GetUserFromToken(oldToken)
+			if err != nil {
+				fmt.Println("Error getting token:", err)
+				continue
+			}
+			refreshedToken, err := controllers.RefreshUserToken(user.RefreshToken)
+			if err != nil {
+				fmt.Println("Error refreshing token:", err)
+				continue
+			}
+
+			newUser, err := models.AddOrUpdateUser(user, *refreshedToken)
+			if err != nil {
+				fmt.Println("Error updating user:", err)
+				continue
+			}
+
+			eventSubs[user.TwitchId].UpdateUser(newUser)
+		}
+		fmt.Println("Keyevent listener stopped")
+	}()
 
 	appStatus.Started = true
 	err := router.Run(fmt.Sprintf(":%d", 8081))
