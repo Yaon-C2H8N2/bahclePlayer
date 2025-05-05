@@ -79,6 +79,11 @@ func main() {
 				continue
 			}
 
+			eventSub := eventSubs[user.TwitchId]
+			if eventSub == nil {
+				fmt.Println("Event sub not found for user:", user.TwitchId)
+				continue
+			}
 			eventSubs[user.TwitchId].UpdateUser(newUser)
 		}
 		fmt.Println("Keyevent listener stopped")
