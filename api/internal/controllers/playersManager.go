@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -55,6 +56,14 @@ func sendErrorMessage(conn *websocket.Conn, message string) {
 	if err != nil {
 		conn.Close()
 	}
+}
+
+func (pm *PlayersManager) closeAndDeleteConn(conn *websocket.Conn, twitchId string, connUuid string) {
+	fmt.Println("Closing connection")
+	conn.Close()
+	pm.mutex.Lock()
+	delete(pm.clients[twitchId], connUuid)
+	pm.mutex.Unlock()
 }
 
 func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
@@ -183,6 +192,23 @@ func (pm *PlayersManager) mainLoop(twitchId string, connUuid string) {
 	sub := valkeyClient.Subscribe(context.Background(), "eventsub:"+twitchId+":new_video")
 	defer sub.Close()
 
+	// Set the pong handler to reset the read deadline when a pong message is received
+	conn.SetPongHandler(func(appData string) error {
+		return conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+	})
+	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+
+	// Keep reading messages from the connection to listen for pong responses
+	go func() {
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				pm.closeAndDeleteConn(conn, twitchId, connUuid)
+				return
+			}
+		}
+	}()
+
 	go func() {
 		for msg := range sub.Channel() {
 			var newVideo models.UsersVideos
@@ -195,17 +221,17 @@ func (pm *PlayersManager) mainLoop(twitchId string, connUuid string) {
 		}
 	}()
 
+	// Send ping messages every 5 seconds to keep the connection alive
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	for {
-		err := conn.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
-		if err != nil {
-			conn.Close()
-
-			pm.mutex.Lock()
-			delete(pm.clients[twitchId], connUuid)
-			pm.mutex.Unlock()
-
-			break
+		select {
+		case <-ticker.C:
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, []byte("ping")); err != nil {
+				pm.closeAndDeleteConn(conn, twitchId, connUuid)
+				return
+			}
 		}
-		time.Sleep(5 * time.Second)
 	}
 }
