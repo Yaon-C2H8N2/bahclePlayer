@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -15,11 +17,10 @@ type PlayersManager struct {
 	mutex      *sync.Mutex
 	clients    map[string]map[string]*websocket.Conn
 	upgrader   websocket.Upgrader
-	eventSubs  map[string]*EventSub
 	apiWrapper *ApiWrapper
 }
 
-func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrapper) *PlayersManager {
+func DefaultPlayersManager(apiWrapper *ApiWrapper) *PlayersManager {
 	return &PlayersManager{
 		mutex:   &sync.Mutex{},
 		clients: make(map[string]map[string]*websocket.Conn),
@@ -28,7 +29,6 @@ func DefaultPlayersManager(eventSubs map[string]*EventSub, apiWrapper *ApiWrappe
 				return true
 			},
 		},
-		eventSubs:  eventSubs,
 		apiWrapper: apiWrapper,
 	}
 }
@@ -40,6 +40,21 @@ func (pm *PlayersManager) GetConnFromTwitchId(twitchId string) map[string]*webso
 	conn := pm.clients[twitchId]
 
 	return conn
+}
+
+func sendErrorMessage(conn *websocket.Conn, message string) {
+	payload := struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}{
+		Error:   "Error",
+		Message: message,
+	}
+
+	err := conn.WriteJSON(payload)
+	if err != nil {
+		conn.Close()
+	}
 }
 
 func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
@@ -58,16 +73,8 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	go func() {
 		select {
 		case <-time.After(10 * time.Second):
-			payload := struct {
-				Error   string `json:"error"`
-				Message string `json:"message"`
-			}{
-				Error:   "Timeout",
-				Message: "No message received before timeout",
-			}
-
 			socketLock.Lock()
-			conn.WriteJSON(payload)
+			sendErrorMessage(conn, "No message received before timeout")
 			conn.Close()
 			socketLock.Unlock()
 			break
@@ -120,15 +127,8 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 
 	jwtToken, err := models.ValidateToken(token)
 	if err != nil {
-		payload := struct {
-			Error   string `json:"error"`
-			Message string `json:"message"`
-		}{
-			Error:   err.Error(),
-			Message: "An error occured when validating token",
-		}
 		socketLock.Lock()
-		conn.WriteJSON(payload)
+		sendErrorMessage(conn, "An error occured when validating token")
 		conn.Close()
 		socketLock.Unlock()
 		return
@@ -137,15 +137,8 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	tokenClaims := jwtToken.Claims.(*models.JWTClaims)
 	user, err := models.GetUserFromUserId(tokenClaims.UserId)
 	if err != nil {
-		payload := struct {
-			Error   string `json:"error"`
-			Message string `json:"message"`
-		}{
-			Error:   err.Error(),
-			Message: "An error occured when getting user from token",
-		}
 		socketLock.Lock()
-		conn.WriteJSON(payload)
+		sendErrorMessage(conn, "An error occured when getting user from token")
 		conn.Close()
 		socketLock.Unlock()
 		return
@@ -153,15 +146,8 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 
 	userInfo, err := pm.apiWrapper.GetUserInfoFromToken(user.Token)
 	if err != nil {
-		payload := struct {
-			Error   string `json:"error"`
-			Message string `json:"message"`
-		}{
-			Error:   err.Error(),
-			Message: "An error occured when getting user info",
-		}
 		socketLock.Lock()
-		conn.WriteJSON(payload)
+		sendErrorMessage(conn, "An error occured when getting user info")
 		conn.Close()
 		socketLock.Unlock()
 		return
@@ -184,56 +170,34 @@ func (pm *PlayersManager) CreatePlayer(c *gin.Context) {
 	pm.mutex.Unlock()
 }
 
+func (pm *PlayersManager) onNewVideo(conn *websocket.Conn, newVideo models.UsersVideos) {
+	err := conn.WriteJSON(newVideo)
+	if err != nil {
+		sendErrorMessage(conn, "An error occured when sending new video")
+	}
+}
+
 func (pm *PlayersManager) mainLoop(twitchId string, connUuid string) {
 	conn := pm.clients[twitchId][connUuid]
-	eventSub := pm.eventSubs[twitchId]
+	valkeyClient := utils.GetValkeyClient()
+	sub := valkeyClient.Subscribe(context.Background(), "eventsub:"+twitchId+":new_video")
+	defer sub.Close()
 
-	unsubscribeEvent := eventSub.notificationHandler.OnNewVideo(func(newVideo models.UsersVideos) {
-		err := conn.WriteJSON(newVideo)
-		if err != nil {
-			payload := struct {
-				Error   string `json:"error"`
-				Message string `json:"message"`
-			}{
-				Error:   err.Error(),
-				Message: "An error occured when sending new video",
+	go func() {
+		for msg := range sub.Channel() {
+			var newVideo models.UsersVideos
+			err := json.Unmarshal([]byte(msg.Payload), &newVideo)
+			if err != nil {
+				sendErrorMessage(conn, "An error occured when unmarshalling new video")
+				continue
 			}
-
-			conn.WriteJSON(payload)
+			pm.onNewVideo(conn, newVideo)
 		}
-	})
-	unsubscribeError := eventSub.OnError(func(eventSubError error) {
-		payload := struct {
-			Error   string `json:"error"`
-			Message string `json:"message"`
-		}{
-			Error:   eventSubError.Error(),
-			Message: "An error occured with Twitch event listener",
-		}
-
-		conn.WriteJSON(payload)
-	})
-	//unsubscribeMessage := eventSub.notificationHandler.OnChatMessage(func(message twitch.ChatMessageEvent) {
-	//	err := conn.WriteJSON(message)
-	//	if err != nil {
-	//		payload := struct {
-	//			Error   string `json:"error"`
-	//			Message string `json:"message"`
-	//		}{
-	//			Error:   err.Error(),
-	//			Message: "An error occured when sending new video",
-	//		}
-	//
-	//		conn.WriteJSON(payload)
-	//	}
-	//})
+	}()
 
 	for {
 		err := conn.WriteControl(websocket.PingMessage, []byte("PING!"), time.Now().Add(5*time.Second))
 		if err != nil {
-			unsubscribeEvent()
-			unsubscribeError()
-			//unsubscribeMessage()
 			conn.Close()
 
 			pm.mutex.Lock()

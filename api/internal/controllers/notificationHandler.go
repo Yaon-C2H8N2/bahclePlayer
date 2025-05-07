@@ -1,13 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/songRequests"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
-	"github.com/google/uuid"
 	"regexp"
 )
 
@@ -16,52 +15,6 @@ type NotificationHandler struct {
 	apiWrapper     *ApiWrapper
 	requestManager *songRequests.RequestManager
 	token          string
-	onNewVideo     []struct {
-		uuid string
-		fn   func(video models.UsersVideos)
-	}
-	onChatMessage []struct {
-		uuid string
-		fn   func(message twitch.ChatMessageEvent)
-	}
-}
-
-func (nh *NotificationHandler) OnNewVideo(callback func(event models.UsersVideos)) func() {
-	nh.onNewVideo = append(nh.onNewVideo, struct {
-		uuid string
-		fn   func(video models.UsersVideos)
-	}{
-		uuid: uuid.New().String(),
-		fn:   callback,
-	})
-
-	return func() {
-		for i, v := range nh.onNewVideo {
-			if v.uuid == nh.onNewVideo[len(nh.onNewVideo)-1].uuid {
-				nh.onNewVideo = append(nh.onNewVideo[:i], nh.onNewVideo[i+1:]...)
-				break
-			}
-		}
-	}
-}
-
-func (nh *NotificationHandler) OnChatMessage(callback func(message twitch.ChatMessageEvent)) func() {
-	nh.onChatMessage = append(nh.onChatMessage, struct {
-		uuid string
-		fn   func(message twitch.ChatMessageEvent)
-	}{
-		uuid: uuid.New().String(),
-		fn:   callback,
-	})
-
-	return func() {
-		for i, v := range nh.onChatMessage {
-			if v.uuid == nh.onChatMessage[len(nh.onChatMessage)-1].uuid {
-				nh.onChatMessage = append(nh.onChatMessage[:i], nh.onChatMessage[i+1:]...)
-				break
-			}
-		}
-	}
 }
 
 func GetNotificationHandler(apiWrapper *ApiWrapper, token string) *NotificationHandler {
@@ -203,10 +156,12 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 			return
 		}
 
-		for _, v := range nh.onNewVideo {
-			if v.fn != nil {
-				v.fn(newVideo)
-			}
+		valkeyClient := utils.GetValkeyClient()
+		jsonPayload, _ := json.Marshal(newVideo)
+		sub := valkeyClient.Publish(context.Background(), "eventsub:"+redemptionEvent.BroadcasterUserId+":new_video", jsonPayload)
+		if sub.Err() != nil {
+			fmt.Println("Failed to publish new video event", sub.Err())
+			return
 		}
 	}
 }
@@ -246,10 +201,12 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 			return
 		}
 
-		for _, v := range nh.onNewVideo {
-			if v.fn != nil {
-				v.fn(newVideo)
-			}
+		valkeyClient := utils.GetValkeyClient()
+		jsonPayload, _ := json.Marshal(newVideo)
+		sub := valkeyClient.Publish(context.Background(), "eventsub:"+pollEndEvent.BroadcasterUserId+":new_video", jsonPayload)
+		if sub.Err() != nil {
+			fmt.Println("Failed to publish new video event", sub.Err())
+			return
 		}
 	}
 	err = nh.apiWrapper.UpdateRedemptionStatus(nh.token, songRequest.TwitchRedemptionID, pollEndEvent.BroadcasterUserId, songRequest.TwitchRewardID, newStatus)
@@ -267,9 +224,11 @@ func (nh *NotificationHandler) handleChatMessage(eventBytes []byte) {
 		return
 	}
 
-	for _, v := range nh.onChatMessage {
-		if v.fn != nil {
-			v.fn(*chatMessageEvent)
-		}
+	valkeyClient := utils.GetValkeyClient()
+	jsonPayload, _ := json.Marshal(chatMessageEvent)
+	sub := valkeyClient.Publish(context.Background(), "eventsub:"+chatMessageEvent.BroadcasterUserId+":new_chat_message", jsonPayload)
+	if sub.Err() != nil {
+		fmt.Println("Failed to publish new chat message event", sub.Err())
+		return
 	}
 }

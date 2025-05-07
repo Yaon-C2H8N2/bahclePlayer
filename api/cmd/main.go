@@ -45,7 +45,7 @@ func main() {
 
 	eventSubs := controllers.GetForAllUsers(apiWrapper)
 	fmt.Println("EventSubs initialized")
-	playersManager := controllers.DefaultPlayersManager(eventSubs, apiWrapper)
+	playersManager := controllers.DefaultPlayersManager(apiWrapper)
 
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
