@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -20,30 +22,33 @@ var eventTypesHandler = map[string]func(*websocket.Conn, any){
 }
 
 func getOverlays(c *gin.Context) {
-	conn := utils.GetConnection()
-	defer conn.Release()
+	TwitchUserContext, _ := c.Get("TwitchUser")
+	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
-	sql := `
-		SELECT overlay_type_id, name, description, schema
-		FROM overlay_types
-	`
-	rows := utils.DoRequest(conn, sql)
-	var overlayTypes []models.OverlayType
-	for rows.Next() {
-		var overlayType models.OverlayType
-		err := rows.Scan(&overlayType.OverlayTypeId, &overlayType.Name, &overlayType.Description, &overlayType.Schema)
-		if err != nil {
-			fmt.Println("Failed to get overlay types:", err)
-			c.JSON(500, gin.H{
-				"error": "Failed to get overlay types",
-			})
-			return
+	overlayTypes, err := models.GetAllOverlayTypes()
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": "Failed to get overlay types",
+		})
+		return
+	}
+
+	var overlayTypesWithLinks []struct {
+		models.OverlayType
+		Link string `json:"link"`
+	}
+	for i, _ := range overlayTypes {
+		var overlayTypeWithLink struct {
+			models.OverlayType
+			Link string `json:"link"`
 		}
-		overlayTypes = append(overlayTypes, overlayType)
+		overlayTypeWithLink.OverlayType = overlayTypes[i]
+		overlayTypeWithLink.Link = os.Getenv("APP_URL") + "/overlay/" + userInfo.ID + "/" + overlayTypes[i].OverlayCode
+		overlayTypesWithLinks = append(overlayTypesWithLinks, overlayTypeWithLink)
 	}
 
 	c.JSON(200, gin.H{
-		"overlay_types": overlayTypes,
+		"overlay_types": overlayTypesWithLinks,
 	})
 }
 
@@ -132,4 +137,21 @@ func getEventSocket(c *gin.Context) {
 			}
 		}
 	}
+}
+
+func getUserOverlays(c *gin.Context) {
+	userContext, _ := c.Get("User")
+	user, _ := userContext.(models.Users)
+
+	userOverlays, err := models.GetAllUsersOverlaysFromUserId(user.UserId)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": "Failed to get user overlays",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"user_overlays": userOverlays,
+	})
 }
