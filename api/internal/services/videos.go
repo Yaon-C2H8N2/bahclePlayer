@@ -3,7 +3,6 @@ package services
 import (
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/songRequests"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/gin-gonic/gin"
 	"regexp"
@@ -52,7 +51,7 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager) {
 	}
 	videoInfo := youtubeResults.Items[0]
 
-	songRequest := songRequests.SongRequest{
+	songRequest := models.SongRequest{
 		YoutubeID: videoInfo.Id,
 		Title:     videoInfo.Snippet.Title,
 		Duration:  videoInfo.ContentDetails.Duration,
@@ -60,7 +59,7 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager) {
 		Type:      videoAddRequest.Type,
 	}
 
-	newVideo, err := songRequests.InsertRequestInDatabase(songRequest, userInfo.ID)
+	newVideo, err := controllers.InsertRequestInDatabase(songRequest, userInfo.ID)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": err.Error(),

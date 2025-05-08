@@ -1,4 +1,4 @@
-package songRequests
+package controllers
 
 import (
 	"fmt"
@@ -7,40 +7,40 @@ import (
 )
 
 type RequestManager struct {
-	requests map[string]SongRequest
+	requests map[string]models.SongRequest
 }
 
 func GetRequestManager() *RequestManager {
 	return &RequestManager{
-		requests: make(map[string]SongRequest),
+		requests: make(map[string]models.SongRequest),
 	}
 }
 
-func (rm *RequestManager) AddRequest(request SongRequest) {
+func (rm *RequestManager) AddRequest(request models.SongRequest) {
 	rm.requests[request.TwitchPollID] = request
 }
 
-func (rm *RequestManager) GetRequest(pollId string) SongRequest {
+func (rm *RequestManager) GetRequest(pollId string) models.SongRequest {
 	var request, ok = rm.requests[pollId]
 	if ok {
 		return request
 	}
-	return SongRequest{}
+	return models.SongRequest{}
 }
 
 func (rm *RequestManager) RemoveRequest(pollId string) {
 	delete(rm.requests, pollId)
 }
 
-func (rm *RequestManager) GetAllRequests() map[string]SongRequest {
+func (rm *RequestManager) GetAllRequests() map[string]models.SongRequest {
 	return rm.requests
 }
 
 func (rm *RequestManager) ClearRequests() {
-	rm.requests = make(map[string]SongRequest)
+	rm.requests = make(map[string]models.SongRequest)
 }
 
-func InsertRequestInDatabase(songRequest SongRequest, broadcasterUserId string) (models.UsersVideos, error) {
+func InsertRequestInDatabase(songRequest models.SongRequest, broadcasterUserId string) (models.UsersVideos, error) {
 	conn := utils.GetConnection()
 	defer conn.Release()
 
