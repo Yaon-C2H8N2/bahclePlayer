@@ -47,10 +47,10 @@ func main() {
 	fmt.Println("EventSubs initialized")
 	playersManager := controllers.DefaultPlayersManager(apiWrapper)
 
-	router := gin.Default()
+	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		services.AuthMiddleware(c, apiWrapper)
-	})
+	}, gin.Recovery())
 	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
 
 	go func() {
