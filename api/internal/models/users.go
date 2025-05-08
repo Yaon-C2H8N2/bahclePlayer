@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"time"
@@ -48,7 +49,7 @@ func GetUserFromToken(token string) (Users, error) {
 		`
 	rows := utils.DoRequest(conn, sql, token)
 	if !rows.Next() {
-		return Users{}, nil
+		return Users{}, fmt.Errorf("No user found with this token")
 	}
 	err := rows.Scan(&user.UserId, &user.TwitchId, &user.Username, &user.Token, &user.TokenCreatedAt, &user.TokenExpiresAt, &user.RefreshToken)
 	if err != nil {

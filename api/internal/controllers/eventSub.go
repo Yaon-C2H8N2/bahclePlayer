@@ -448,6 +448,6 @@ func (es *EventSub) listenToMessages() {
 				break
 			}
 		}
-		fmt.Printf("eventSub[%s] stopped %s\n", es.user.Username)
+		fmt.Printf("eventSub[%s] stopped %s\n", es.user.Username, err)
 	}()
 }
