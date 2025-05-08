@@ -7,8 +7,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var excludedPaths = map[string]bool{
+	"/player":          true,
+	"/login":           true,
+	"/logout":          true,
+	"/appinfo":         true,
+	"/overlays/events": true,
+}
+
 func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
-	if c.Request.URL.Path == "/player" || c.Request.URL.Path == "/login" || c.Request.URL.Path == "/logout" || c.Request.URL.Path == "/appinfo" {
+	if excludedPaths[c.Request.URL.Path] {
 		c.Next()
 		return
 	}

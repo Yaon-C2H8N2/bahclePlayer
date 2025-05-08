@@ -10,31 +10,33 @@ func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controlle
 	router.POST("/login", func(c *gin.Context) {
 		login(c, aw, es)
 	})
-	router.GET("/logout", func(c *gin.Context) {
-		logout(c)
-	})
+	router.GET("/logout", logout)
+
 	router.GET("/player", func(c *gin.Context) {
 		getPlayer(c, pm)
 	})
-	router.GET("/playlist", func(c *gin.Context) {
-		getPlaylistAndQueue(c)
+	router.PUT("/player/currentPlaying", setCurrentPlaying)
+	router.POST("/addVideo", func(c *gin.Context) {
+		//TODO : change path to /player/addVideo (and maybe change the method to PUT)
+		addVideos(c, pm)
 	})
-	router.DELETE("/playlist", func(c *gin.Context) {
-		deleteVideo(c)
-	})
+
+	//TODO : change path to /player/playlist
+	router.GET("/playlist", getPlaylistAndQueue)
+	//TODO : change path to /player/playlist
+	router.DELETE("/playlist", deleteVideo)
+
 	router.GET("/settings", func(c *gin.Context) {
 		saveSettings(c, aw)
 	})
 	router.GET("/rewards", func(c *gin.Context) {
 		getRewardsIds(c, aw)
 	})
-	router.POST("/addVideo", func(c *gin.Context) {
-		addVideos(c, pm)
-	})
+
+	router.GET("/overlays", getOverlays)
+	router.GET("/overlays/events", getEventSocket)
+
 	router.GET("/appinfo", func(c *gin.Context) {
 		c.JSON(200, status)
-	})
-	router.GET("/overlays", func(c *gin.Context) {
-		getOverlays(c)
 	})
 }
