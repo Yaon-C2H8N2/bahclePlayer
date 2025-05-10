@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/songRequests"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"regexp"
@@ -13,7 +13,7 @@ import (
 type NotificationHandler struct {
 	handlers       map[string]func([]byte)
 	apiWrapper     *ApiWrapper
-	requestManager *songRequests.RequestManager
+	requestManager *RequestManager
 	token          string
 }
 
@@ -21,7 +21,7 @@ func GetNotificationHandler(apiWrapper *ApiWrapper, token string) *NotificationH
 	handler := &NotificationHandler{
 		handlers:       make(map[string]func([]byte)),
 		apiWrapper:     apiWrapper,
-		requestManager: songRequests.GetRequestManager(),
+		requestManager: GetRequestManager(),
 		token:          token,
 	}
 
@@ -79,7 +79,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		return
 	}
 
-	var songRequest = songRequests.SongRequest{}
+	var songRequest = models.SongRequest{}
 	for _, c := range config {
 		if c.Config == "PLAYLIST_REDEMPTION" && c.Value == redemptionEvent.Reward.Id {
 			songRequest.Type = "PLAYLIST"
@@ -150,7 +150,7 @@ func (nh *NotificationHandler) handleChannelPointsCustomRewardRedemptionAdd(even
 		songRequest.TwitchPollID = twitchPollId
 		nh.requestManager.AddRequest(songRequest)
 	} else if songRequest.Method == "DIRECT" {
-		newVideo, err := songRequests.InsertRequestInDatabase(songRequest, redemptionEvent.BroadcasterUserId)
+		newVideo, err := InsertRequestInDatabase(songRequest, redemptionEvent.BroadcasterUserId)
 		if err != nil {
 			fmt.Println("Failed to insert video into database")
 			return
@@ -195,7 +195,7 @@ func (nh *NotificationHandler) handleChannelPollEnd(eventBytes []byte) {
 	if maxChoice == "Yes" && maxVotes > 0 {
 		newStatus = "FULFILLED"
 
-		newVideo, err := songRequests.InsertRequestInDatabase(songRequest, pollEndEvent.BroadcasterUserId)
+		newVideo, err := InsertRequestInDatabase(songRequest, pollEndEvent.BroadcasterUserId)
 		if err != nil {
 			fmt.Println("Failed to insert video into database")
 			return

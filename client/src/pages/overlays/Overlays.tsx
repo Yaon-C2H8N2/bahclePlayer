@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/network.ts";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 
 interface IOverlaysProps {
     onClose: () => void;
@@ -12,12 +13,14 @@ interface OverlayType {
     name: string;
     description: string;
     schema: any;
+    link: string;
 }
 
 export const Overlays = (props: IOverlaysProps) => {
     const [loading, setLoading] = useState<boolean>(true);
     const [overlayTypes, setOverlayTypes] = useState<OverlayType[]>([]);
     const [selectedOverlayType, setSelectedOverlayType] = useState<OverlayType | null>(null);
+    const [copied, setCopied] = useState<boolean>(false);
 
     useEffect(() => {
         if (!document.cookie.includes("token")) {
@@ -35,6 +38,18 @@ export const Overlays = (props: IOverlaysProps) => {
                 setLoading(false);
             });
     }, []);
+
+    const handleCopyLink = async () => {
+        if (selectedOverlayType) {
+            try {
+                await navigator.clipboard.writeText(selectedOverlayType.link);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+            } catch (err) {
+                console.error("Failed to copy link:", err);
+            }
+        }
+    };
 
     return (
         <div className="flex flex-col h-full">
@@ -78,6 +93,36 @@ export const Overlays = (props: IOverlaysProps) => {
                                 <h3 className="font-medium mb-2">{selectedOverlayType.name}</h3>
                                 <div className="text-sm text-gray-500 mb-4">
                                     {selectedOverlayType.description || "No description available"}
+                                </div>
+                                <div className="mb-4">
+                                    <h4 className="font-medium mb-2">Overlay Link</h4>
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            value={selectedOverlayType.link} 
+                                            readOnly 
+                                            className="flex-grow"
+                                        />
+                                        <Button 
+                                            onClick={handleCopyLink} 
+                                            variant="outline" 
+                                            className="flex gap-1 items-center"
+                                        >
+                                            {copied ? (
+                                                <>
+                                                    <Check className="h-4 w-4" />
+                                                    Copied
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Copy className="h-4 w-4" />
+                                                    Copy
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Use this link in your streaming software as a browser source.
+                                    </p>
                                 </div>
                                 {/* Content will be added in future tasks */}
                                 <div className="p-4 border rounded bg-gray-50 text-center text-gray-500">

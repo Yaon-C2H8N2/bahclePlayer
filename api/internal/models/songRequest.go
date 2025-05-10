@@ -1,4 +1,4 @@
-package songRequests
+package models
 
 type SongRequest struct {
 	TwitchPollID       string `json:"twitch_poll_id"`

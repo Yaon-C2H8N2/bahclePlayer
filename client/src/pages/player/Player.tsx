@@ -172,6 +172,17 @@ export const Player = () => {
         })
     }
 
+    useEffect(() => {
+        if (currentVideo) {
+            fetchApi(`/api/player/currentPlaying`, {
+                method: "PUT",
+                body: JSON.stringify({
+                    ...currentVideo
+                })
+            })
+        }
+    }, [currentVideo]);
+
     return (
         <div className={"flex flex-col items-center w-full h-[100vh]"}>
             <div className={"flex flex-row w-full p-14 gap-10"}>
