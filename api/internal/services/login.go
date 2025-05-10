@@ -127,7 +127,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 			return
 		}
 
-		es, err := controllers.GetEventSub(aw, user.Token)
+		es, err := controllers.GetEventSub(aw, user)
 
 		if err != nil {
 			c.JSON(500, gin.H{
@@ -137,8 +137,8 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 		}
 
 		es.OnStarted(func() {
-			es.DropAllSubscriptions(user.Token)
-			es.InitSubscriptions(user.Token)
+			es.DropAllSubscriptions()
+			es.InitSubscriptions()
 		})
 		es.Start()
 		eventSubs[user.TwitchId] = es

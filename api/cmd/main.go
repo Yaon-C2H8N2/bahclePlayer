@@ -44,6 +44,14 @@ func main() {
 	apiWrapper.SetAppToken(appToken)
 
 	eventSubs := controllers.GetForAllUsers(apiWrapper)
+	for _, es := range eventSubs {
+		es.OnStarted(func() {
+			es.DropAllSubscriptions()
+			es.InitSubscriptions()
+		})
+		es.Start()
+	}
+
 	fmt.Println("EventSubs initialized")
 	playersManager := controllers.DefaultPlayersManager(apiWrapper)
 

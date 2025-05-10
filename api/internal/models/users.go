@@ -17,6 +17,26 @@ type Users struct {
 	RefreshToken   string    `json:"refresh_token"`
 }
 
+func GetAllUsers() ([]Users, error) {
+	conn := utils.GetConnection()
+	defer conn.Release()
+	sql := `
+			SELECT users.user_id, users.twitch_id, users.username, users.token, users.token_created_at, users.token_expires_at, users.refresh_token
+			FROM users
+		`
+	rows := utils.DoRequest(conn, sql)
+	var users []Users
+	for rows.Next() {
+		var result Users
+		err := rows.Scan(&result.UserId, &result.TwitchId, &result.Username, &result.Token, &result.TokenCreatedAt, &result.TokenExpiresAt, &result.RefreshToken)
+		if err != nil {
+			return []Users{}, err
+		}
+		users = append(users, result)
+	}
+	return users, nil
+}
+
 func GetUserFromUserId(userid int) (Users, error) {
 	conn := utils.GetConnection()
 	defer conn.Release()

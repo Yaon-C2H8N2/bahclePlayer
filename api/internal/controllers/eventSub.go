@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
-	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gorilla/websocket"
 	"io"
 	"log"
@@ -21,22 +20,14 @@ type EventSub struct {
 	apiWrapper          *ApiWrapper
 	notificationHandler *NotificationHandler
 	user                models.Users
+	twitchUser          twitch.UserInfo
 }
 
 func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
-	conn := utils.GetConnection()
-	defer conn.Release()
-
-	sql := `
-			SELECT user_id, username, twitch_id, token, token_created_at
-			FROM users
-		`
-	rows := utils.DoRequest(conn, sql)
-	var users []models.Users
-	for rows.Next() {
-		var user models.Users
-		rows.Scan(&user.UserId, &user.Username, &user.TwitchId, &user.Token, &user.TokenCreatedAt)
-		users = append(users, user)
+	users, err := models.GetAllUsers()
+	if err != nil {
+		fmt.Println("Error getting users:", err)
+		return nil
 	}
 
 	eventSubs := make(map[string]*EventSub)
@@ -46,7 +37,7 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 			continue
 		}
 		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
-		es, err := GetEventSub(apiWrapper, user.Token)
+		es, err := GetEventSub(apiWrapper, user)
 
 		if err != nil {
 			tokenResponse, err := RefreshUserToken(user.RefreshToken)
@@ -62,49 +53,28 @@ func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
 				continue
 			}
 
-			es, err = GetEventSub(apiWrapper, user.Token)
+			es, err = GetEventSub(apiWrapper, user)
 			if err != nil {
 				fmt.Printf("Error getting event sub for user %s: %s\n", user.Username, err)
 				continue
 			}
 		}
-
-		es.user = user
-		es.OnStarted(func() {
-			es.DropAllSubscriptions(user.Token)
-			es.InitSubscriptions(user.Token)
-		})
-		es.Start()
 		eventSubs[user.TwitchId] = es
 	}
 
 	return eventSubs
 }
 
-func GetEventSub(apiWrapper *ApiWrapper, token string) (*EventSub, error) {
-	userInfo, err := apiWrapper.GetUserInfoFromToken(token)
+func GetEventSub(apiWrapper *ApiWrapper, user models.Users) (*EventSub, error) {
+	twitchUser, err := apiWrapper.GetUserInfoFromToken(user.Token)
 
 	if err != nil {
 		fmt.Println("Error getting user info from token:", err)
 		return nil, err
 	}
-
-	conn := utils.GetConnection()
-	defer conn.Release()
-
-	sql := `
-			SELECT user_id, username, twitch_id, token, token_created_at
-			FROM users
-			WHERE twitch_id = $1
-		`
-	rows := utils.DoRequest(conn, sql, userInfo.ID)
-	var user models.Users
-	if rows.Next() {
-		rows.Scan(&user.UserId, &user.Username, &user.TwitchId, &user.Token, &user.TokenCreatedAt)
-	}
-
 	var newEventSub = &EventSub{
-		user: user,
+		user:       user,
+		twitchUser: twitchUser,
 	}
 
 	newEventSub.apiWrapper = apiWrapper
@@ -117,10 +87,9 @@ func (es *EventSub) Start() {
 }
 
 func (es *EventSub) UpdateUser(user models.Users) {
-	es.user = user
+	// todo : implement a graceful stop before updating the user
 
-	es.DropAllSubscriptions(user.Token)
-	es.InitSubscriptions(user.Token)
+	es.user = user
 	es.listenToMessages()
 }
 
@@ -140,17 +109,17 @@ func (es *EventSub) OnStarted(callback func()) func() {
 	}
 }
 
-func (es *EventSub) GetAllSubscriptionsForUser(user twitch.UserInfo, userToken string) (twitch.SubscriptionResponse, error) {
+func (es *EventSub) GetAllSubscriptionsForTwitchUser() (twitch.SubscriptionResponse, error) {
 	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", twitchUrl+"?user_id="+user.ID, nil)
+	req, err := http.NewRequest("GET", twitchUrl+"?user_id="+es.twitchUser.ID, nil)
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return twitch.SubscriptionResponse{}, err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Authorization", "Bearer "+es.user.Token)
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
 	req.Header.Add("Content-Type", "application/json")
 
@@ -176,14 +145,8 @@ func (es *EventSub) GetAllSubscriptionsForUser(user twitch.UserInfo, userToken s
 	return *subscriptionResponse, nil
 }
 
-func (es *EventSub) DropAllSubscriptions(userToken string) {
-	user, err := es.apiWrapper.GetUserInfoFromToken(userToken)
-	if err != nil {
-		fmt.Println("Error getting broadcaster ID:", err)
-		return
-	}
-
-	subscriptionResponse, err := es.GetAllSubscriptionsForUser(user, userToken)
+func (es *EventSub) DropAllSubscriptions() {
+	subscriptionResponse, err := es.GetAllSubscriptionsForTwitchUser()
 	if err != nil {
 		fmt.Println("Error getting all subscriptions:", err)
 		return
@@ -192,7 +155,7 @@ func (es *EventSub) DropAllSubscriptions(userToken string) {
 	fmt.Printf("eventSub[%s] dropping %d subscriptions\n", es.user.Username, len(subscriptionResponse.Data))
 	for _, subscription := range subscriptionResponse.Data {
 		if subscription.Status == "enabled" {
-			err = es.unsubscribeFromEvent(userToken, subscription.ID)
+			err = es.unsubscribeFromEvent(subscription.ID)
 			if err != nil {
 				fmt.Println("Error unsubscribing from event:", err)
 			}
@@ -200,7 +163,7 @@ func (es *EventSub) DropAllSubscriptions(userToken string) {
 	}
 }
 
-func (es *EventSub) unsubscribeFromEvent(userToken string, subscriptionId string) error {
+func (es *EventSub) unsubscribeFromEvent(subscriptionId string) error {
 	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
 
 	httpClient := &http.Client{}
@@ -209,7 +172,7 @@ func (es *EventSub) unsubscribeFromEvent(userToken string, subscriptionId string
 		return err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Authorization", "Bearer "+es.user.Token)
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
 	req.Header.Add("Content-Type", "application/json")
 
@@ -231,27 +194,27 @@ func (es *EventSub) unsubscribeFromEvent(userToken string, subscriptionId string
 	return nil
 }
 
-func (es *EventSub) InitSubscriptions(userToken string) {
+func (es *EventSub) InitSubscriptions() {
 	var err error
-	err = es.subscribeToMessageEvents(userToken)
+	err = es.subscribeToMessageEvents(es.user.Token)
 	if err != nil {
-		errorMessage := fmt.Sprintf("Error subscribing to message events with token %s: %s", userToken, err)
+		errorMessage := fmt.Sprintf("Error subscribing to message events with token %s: %s", es.user.Token, err)
 		fmt.Printf(errorMessage)
 		if es.onError != nil {
 			go es.onError(fmt.Errorf(errorMessage))
 		}
 	}
-	err = es.subscribeToRedemptionEvents(userToken)
+	err = es.subscribeToRedemptionEvents()
 	if err != nil {
-		errorMessage := fmt.Sprintf("Error subscribing to redemption events with token %s: %s\n", userToken, err)
+		errorMessage := fmt.Sprintf("Error subscribing to redemption events with token %s: %s\n", es.user.Token, err)
 		fmt.Printf(errorMessage)
 		if es.onError != nil {
 			go es.onError(fmt.Errorf(errorMessage))
 		}
 	}
-	err = es.subscribeToPollEvents(userToken)
+	err = es.subscribeToPollEvents()
 	if err != nil {
-		errorMessage := fmt.Sprintf("Error subscribing to poll events with token %s: %s\n", userToken, err)
+		errorMessage := fmt.Sprintf("Error subscribing to poll events with token %s: %s\n", es.user.Token, err)
 		fmt.Printf(errorMessage)
 		if es.onError != nil {
 			go es.onError(fmt.Errorf(errorMessage))
@@ -259,7 +222,7 @@ func (es *EventSub) InitSubscriptions(userToken string) {
 	}
 }
 
-func (es *EventSub) subscribeToEvent(userToken string, request twitch.SubscriptionRequest) error {
+func (es *EventSub) subscribeToEvent(request twitch.SubscriptionRequest) error {
 	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
 
 	httpClient := &http.Client{}
@@ -269,7 +232,7 @@ func (es *EventSub) subscribeToEvent(userToken string, request twitch.Subscripti
 		return err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+userToken)
+	req.Header.Add("Authorization", "Bearer "+es.user.Token)
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
 	req.Header.Add("Content-Type", "application/json")
 
@@ -303,17 +266,12 @@ func (es *EventSub) subscribeToEvent(userToken string, request twitch.Subscripti
 }
 
 func (es *EventSub) subscribeToMessageEvents(userToken string) error {
-	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
-	if err != nil {
-		return err
-	}
-
 	var data = twitch.SubscriptionRequest{
 		Type:    "channel.chat.message",
 		Version: "1",
 		Condition: twitch.Condition{
-			BroadcasterUserId: broadcasterId.ID,
-			UserId:            broadcasterId.ID,
+			BroadcasterUserId: es.twitchUser.ID,
+			UserId:            es.twitchUser.ID,
 		},
 		Transport: twitch.Transport{
 			Method:    "websocket",
@@ -321,15 +279,15 @@ func (es *EventSub) subscribeToMessageEvents(userToken string) error {
 		},
 	}
 
-	err = es.subscribeToEvent(userToken, data)
+	err := es.subscribeToEvent(data)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (es *EventSub) subscribeToRedemptionEvents(userToken string) error {
-	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
+func (es *EventSub) subscribeToRedemptionEvents() error {
+	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(es.user.Token)
 	if err != nil {
 		return err
 	}
@@ -346,24 +304,19 @@ func (es *EventSub) subscribeToRedemptionEvents(userToken string) error {
 		},
 	}
 
-	err = es.subscribeToEvent(userToken, data)
+	err = es.subscribeToEvent(data)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (es *EventSub) subscribeToPollEvents(userToken string) error {
-	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(userToken)
-	if err != nil {
-		return err
-	}
-
+func (es *EventSub) subscribeToPollEvents() error {
 	var data = twitch.SubscriptionRequest{
 		Type:    "channel.poll.end",
 		Version: "1",
 		Condition: twitch.Condition{
-			BroadcasterUserId: broadcasterId.ID,
+			BroadcasterUserId: es.twitchUser.ID,
 		},
 		Transport: twitch.Transport{
 			Method:    "websocket",
@@ -371,7 +324,7 @@ func (es *EventSub) subscribeToPollEvents(userToken string) error {
 		},
 	}
 
-	err = es.subscribeToEvent(userToken, data)
+	err := es.subscribeToEvent(data)
 	if err != nil {
 		return err
 	}
