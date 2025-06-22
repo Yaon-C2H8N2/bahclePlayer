@@ -86,13 +86,6 @@ func (es *EventSub) Start() {
 	es.listenToMessages()
 }
 
-func (es *EventSub) UpdateUser(user models.Users) {
-	// todo : implement a graceful stop before updating the user
-
-	es.user = user
-	es.listenToMessages()
-}
-
 func (es *EventSub) OnError(callback func(err error)) func() {
 	es.onError = callback
 
@@ -331,6 +324,31 @@ func (es *EventSub) subscribeToPollEvents() error {
 	return nil
 }
 
+func (es *EventSub) readMessageFromWebSocket(conn *websocket.Conn) (*twitch.BaseMessage, []byte, error) {
+	_, messageBytes, err := conn.ReadMessage()
+	if err != nil {
+		errMsg := fmt.Sprintf("eventSub[%s] couldn't read message", es.user.Username)
+		log.Println(errMsg)
+		if es.onError != nil {
+			go es.onError(fmt.Errorf(errMsg))
+		}
+		return nil, nil, err
+	}
+
+	var message = &twitch.BaseMessage{}
+	err = json.Unmarshal(messageBytes, message)
+	if err != nil {
+		errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling base message: %s", es.user.Username, messageBytes)
+		log.Println(errMsg)
+		if es.onError != nil {
+			go es.onError(fmt.Errorf(errMsg))
+		}
+		return nil, messageBytes, err
+	}
+
+	return message, messageBytes, nil
+}
+
 func (es *EventSub) listenToMessages() {
 	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
 	webSocketUrl := os.Getenv("TWITCH_EVENTSUB_WEBSOCKET_URL")
@@ -348,24 +366,8 @@ func (es *EventSub) listenToMessages() {
 		defer conn.Close()
 	loopiloop:
 		for {
-			_, messageBytes, err := conn.ReadMessage()
+			message, messageBytes, err := es.readMessageFromWebSocket(conn)
 			if err != nil {
-				errMsg := fmt.Sprintf("eventSub[%s] couldn't read message: %s", es.user.Username, messageBytes)
-				log.Println(errMsg)
-				if es.onError != nil {
-					go es.onError(fmt.Errorf(errMsg))
-				}
-				break loopiloop
-			}
-
-			var message = &twitch.BaseMessage{}
-			err = json.Unmarshal(messageBytes, message)
-			if err != nil {
-				errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling base message: %s", es.user.Username, messageBytes)
-				log.Println(errMsg)
-				if es.onError != nil {
-					go es.onError(fmt.Errorf(errMsg))
-				}
 				break loopiloop
 			}
 
@@ -399,8 +401,18 @@ func (es *EventSub) listenToMessages() {
 				fmt.Printf("eventSub[%s] received notification: %s\n", es.user.Username, notificationMessage.Metadata.MessageType)
 				go es.notificationHandler.Handle(messageBytes)
 				break
+			case "session_keepalive":
+				// This is a keepalive message, we can ignore it
+				break
+			default:
+				errMsg := fmt.Sprintf("eventSub[%s] received unknown message type: %s", es.user.Username, message.Metadata.MessageType)
+				log.Println(errMsg)
+				if es.onError != nil {
+					go es.onError(fmt.Errorf(errMsg))
+				}
+				break
 			}
 		}
-		fmt.Printf("eventSub[%s] stopped %s\n", es.user.Username, err)
+		fmt.Printf("eventSub[%s] stopped\n", es.user.Username)
 	}()
 }

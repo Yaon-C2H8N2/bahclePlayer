@@ -87,12 +87,13 @@ func main() {
 				continue
 			}
 
-			eventSub := eventSubs[user.TwitchId]
-			if eventSub == nil {
-				fmt.Println("Event sub not found for user:", user.TwitchId)
-				continue
-			}
-			eventSub.UpdateUser(newUser)
+			newEventSub, err := controllers.GetEventSub(apiWrapper, newUser)
+			newEventSub.OnStarted(func() {
+				newEventSub.DropAllSubscriptions()
+				newEventSub.InitSubscriptions()
+				eventSubs[user.TwitchId] = newEventSub
+			})
+			newEventSub.Start()
 		}
 		fmt.Println("Keyevent listener stopped")
 	}()
