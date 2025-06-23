@@ -87,11 +87,17 @@ func main() {
 				continue
 			}
 
+			oldEventSub, exists := eventSubs[user.TwitchId]
 			newEventSub, err := controllers.GetEventSub(apiWrapper, newUser)
 			newEventSub.OnStarted(func() {
+				oldEventSub.Stop()
 				newEventSub.DropAllSubscriptions()
 				newEventSub.InitSubscriptions()
-				eventSubs[user.TwitchId] = newEventSub
+
+				if exists {
+					delete(eventSubs, user.TwitchId)
+				}
+				eventSubs[newUser.TwitchId] = newEventSub
 			})
 			newEventSub.Start()
 		}

@@ -21,6 +21,7 @@ type EventSub struct {
 	notificationHandler *NotificationHandler
 	user                models.Users
 	twitchUser          twitch.UserInfo
+	stopChan            chan bool
 }
 
 func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
@@ -84,6 +85,12 @@ func GetEventSub(apiWrapper *ApiWrapper, user models.Users) (*EventSub, error) {
 
 func (es *EventSub) Start() {
 	es.listenToMessages()
+	es.stopChan = make(chan bool)
+}
+
+func (es *EventSub) Stop() {
+	es.stopChan <- true
+	close(es.stopChan)
 }
 
 func (es *EventSub) OnError(callback func(err error)) func() {
@@ -349,7 +356,37 @@ func (es *EventSub) readMessageFromWebSocket(conn *websocket.Conn) (*twitch.Base
 	return message, messageBytes, nil
 }
 
+type chanContent struct {
+	Message      *twitch.BaseMessage
+	MessageBytes []byte
+	error        error
+}
+
+func (es *EventSub) getMessageChannel(conn *websocket.Conn) chan chanContent {
+	messageChan := make(chan chanContent)
+
+	go func() {
+		defer close(messageChan)
+		for {
+			message, messageBytes, err := es.readMessageFromWebSocket(conn)
+			if err != nil {
+				messageChan <- chanContent{error: err}
+				return
+			}
+
+			messageChan <- chanContent{
+				Message:      message,
+				MessageBytes: messageBytes,
+				error:        nil,
+			}
+		}
+	}()
+
+	return messageChan
+}
+
 func (es *EventSub) listenToMessages() {
+	fmt.Printf("eventSub[%s] starting message listener\n", es.user.Username)
 	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
 	webSocketUrl := os.Getenv("TWITCH_EVENTSUB_WEBSOCKET_URL")
 	conn, _, err := websocket.DefaultDialer.Dial(webSocketUrl, nil)
@@ -364,12 +401,52 @@ func (es *EventSub) listenToMessages() {
 
 	go func() {
 		defer conn.Close()
+
+		messageChan := es.getMessageChannel(conn)
+
 	loopiloop:
 		for {
-			message, messageBytes, err := es.readMessageFromWebSocket(conn)
-			if err != nil {
+			var content chanContent
+			var ok bool
+
+			select {
+			case <-es.stopChan:
+				fmt.Printf("eventSub[%s] stopping message listener\n", es.user.Username)
 				break loopiloop
+			case content, ok = <-messageChan:
+				break
 			}
+
+			redial := false
+			if !ok || content.error != nil {
+				errMsg := fmt.Sprintf("eventSub[%s] error reading message: %s", es.user.Username, content.error)
+				log.Println(errMsg)
+				if es.onError != nil {
+					go es.onError(fmt.Errorf(errMsg))
+				}
+				conn.Close()
+
+				conn, _, err = websocket.DefaultDialer.Dial(webSocketUrl, nil)
+
+				if err != nil {
+					errMsg := fmt.Sprintf("eventSub[%s] couldn't re-dial twitch websocket: %s", es.user.Username, err)
+					log.Println(errMsg)
+					if es.onError != nil {
+						go es.onError(fmt.Errorf(errMsg))
+					}
+					break loopiloop
+				}
+				fmt.Printf("eventSub[%s] reconnected to twitch websocket\n", es.user.Username)
+				es.DropAllSubscriptions()
+				es.InitSubscriptions()
+				messageChan = es.getMessageChannel(conn)
+				redial = true
+
+				continue
+			}
+
+			message := content.Message
+			messageBytes := content.MessageBytes
 
 			switch message.Metadata.MessageType {
 			case "session_welcome":
@@ -385,7 +462,9 @@ func (es *EventSub) listenToMessages() {
 				}
 
 				es.sessionId = welcomeMessage.Payload.Session.Id
-				go es.onStarted()
+				if !redial {
+					go es.onStarted()
+				}
 				break
 			case "notification":
 				var notificationMessage = &twitch.NotificationMessage{}
