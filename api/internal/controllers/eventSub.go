@@ -21,7 +21,7 @@ type EventSub struct {
 	notificationHandler *NotificationHandler
 	user                models.Users
 	twitchUser          twitch.UserInfo
-	stopChan            chan bool
+	stopChan            chan struct{}
 }
 
 func GetForAllUsers(apiWrapper *ApiWrapper) map[string]*EventSub {
@@ -85,11 +85,10 @@ func GetEventSub(apiWrapper *ApiWrapper, user models.Users) (*EventSub, error) {
 
 func (es *EventSub) Start() {
 	es.listenToMessages()
-	es.stopChan = make(chan bool)
+	es.stopChan = make(chan struct{})
 }
 
 func (es *EventSub) Stop() {
-	es.stopChan <- true
 	close(es.stopChan)
 }
 
@@ -369,15 +368,15 @@ func (es *EventSub) getMessageChannel(conn *websocket.Conn) chan chanContent {
 		defer close(messageChan)
 		for {
 			message, messageBytes, err := es.readMessageFromWebSocket(conn)
-			if err != nil {
-				messageChan <- chanContent{error: err}
-				return
-			}
 
 			messageChan <- chanContent{
 				Message:      message,
 				MessageBytes: messageBytes,
-				error:        nil,
+				error:        err,
+			}
+
+			if err != nil {
+				return
 			}
 		}
 	}()
@@ -462,7 +461,7 @@ func (es *EventSub) listenToMessages() {
 				}
 
 				es.sessionId = welcomeMessage.Payload.Session.Id
-				if !redial {
+				if !redial && es.onStarted != nil {
 					go es.onStarted()
 				}
 				break
