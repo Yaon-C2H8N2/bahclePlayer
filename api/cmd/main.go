@@ -43,13 +43,22 @@ func main() {
 	apiWrapper.SetClientId(os.Getenv("TWITCH_CLIENT_ID"))
 	apiWrapper.SetAppToken(appToken)
 
-	eventSubs := controllers.GetForAllUsers(apiWrapper)
-	for _, es := range eventSubs {
-		es.OnStarted(func() {
-			es.DropAllSubscriptions()
-			es.InitSubscriptions()
-		})
-		es.Start()
+	users, err := models.GetAllUsers()
+	if err != nil {
+		panic(err)
+	}
+
+	eventSubPool := controllers.GetEventSubPool(os.Getenv("TWITCH_EVENTSUB_WEBSOCKET_URL"))
+	for _, user := range users {
+		if user.Token == "" {
+			continue
+		}
+		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
+		err = eventSubPool.AddEventSub(apiWrapper, user)
+		if err != nil {
+			fmt.Printf("Error initializing EventSub for user %s: %s\n", user.Username, err)
+			continue
+		}
 	}
 
 	fmt.Println("EventSubs initialized")
@@ -59,7 +68,7 @@ func main() {
 	router.Use(func(c *gin.Context) {
 		services.AuthMiddleware(c, apiWrapper)
 	}, gin.Recovery())
-	services.MapRoutes(router, playersManager, apiWrapper, eventSubs, &appStatus)
+	services.MapRoutes(router, playersManager, apiWrapper, eventSubPool, &appStatus)
 
 	go func() {
 		for msg := range sub.Channel() {
@@ -87,25 +96,18 @@ func main() {
 				continue
 			}
 
-			oldEventSub, exists := eventSubs[user.TwitchId]
-			newEventSub, err := controllers.GetEventSub(apiWrapper, newUser)
-			oldEventSub.Stop()
-			newEventSub.OnStarted(func() {
-				newEventSub.DropAllSubscriptions()
-				newEventSub.InitSubscriptions()
-
-				if exists {
-					delete(eventSubs, user.TwitchId)
-				}
-				eventSubs[newUser.TwitchId] = newEventSub
-			})
-			newEventSub.Start()
+			err = eventSubPool.UpdateUser(newUser)
+			if err != nil {
+				fmt.Println("Error updating EventSub for user:", err)
+				continue
+			}
+			fmt.Println("Token refreshed for user:", newUser.TwitchId)
 		}
 		fmt.Println("Keyevent listener stopped")
 	}()
 
 	appStatus.Started = true
-	err := router.Run(fmt.Sprintf(":%d", 8081))
+	err = router.Run(fmt.Sprintf(":%d", 8081))
 	if err != nil {
 		panic(err)
 	}

@@ -6,9 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, es map[string]*controllers.EventSub, status *models.AppStatus) {
+func MapRoutes(router *gin.Engine, pm *controllers.PlayersManager, aw *controllers.ApiWrapper, esp *controllers.EventSubPool, status *models.AppStatus) {
 	router.POST("/login", func(c *gin.Context) {
-		login(c, aw, es)
+		login(c, aw, esp)
 	})
 	router.GET("/logout", logout)
 

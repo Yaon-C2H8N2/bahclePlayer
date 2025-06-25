@@ -63,7 +63,7 @@ func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
 	c.Next()
 }
 
-func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*controllers.EventSub) {
+func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubPool *controllers.EventSubPool) {
 	loginRequest := models.LoginRequest{}
 	err := c.BindJSON(&loginRequest)
 
@@ -134,22 +134,13 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubs map[string]*con
 			})
 			return
 		}
-
-		es, err := controllers.GetEventSub(aw, user)
-
+		err = eventSubPool.AddEventSub(aw, user)
 		if err != nil {
 			c.JSON(500, gin.H{
-				"error": err.Error(),
+				"error": "Failed to initialize EventSub: " + err.Error(),
 			})
 			return
 		}
-
-		es.OnStarted(func() {
-			es.DropAllSubscriptions()
-			es.InitSubscriptions()
-		})
-		es.Start()
-		eventSubs[user.TwitchId] = es
 	}
 
 	jwtToken, err := models.GenerateToken(user)
