@@ -155,3 +155,56 @@ func getUserOverlays(c *gin.Context) {
 		"user_overlays": userOverlays,
 	})
 }
+
+func getUserOverlaySettings(c *gin.Context) {
+	twitchId := c.Query("twitch_id")
+	overlayCode := c.Query("overlay_code")
+
+	if twitchId == "" || overlayCode == "" {
+		c.JSON(400, gin.H{
+			"error": "Missing required parameters: twitch_id and overlay_code",
+		})
+		return
+	}
+
+	userOverlaySettings, err := models.GetUserOverlaySettingsByTwitchId(twitchId, overlayCode)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": "Failed to get user overlay settings",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"settings": userOverlaySettings,
+	})
+}
+
+func saveUserOverlaySettings(c *gin.Context) {
+	userContext, _ := c.Get("User")
+	user, _ := userContext.(models.Users)
+
+	var request struct {
+		OverlayCode string      `json:"overlay_code"`
+		Settings    interface{} `json:"settings"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(400, gin.H{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	err := models.SaveUserOverlaySettings(user.UserId, request.OverlayCode, request.Settings)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": "Failed to save user overlay settings",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "Settings saved successfully",
+	})
+}

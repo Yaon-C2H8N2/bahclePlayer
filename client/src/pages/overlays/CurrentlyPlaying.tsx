@@ -2,10 +2,14 @@ import {useEffect, useState} from "react";
 import {useParams} from "react-router-dom";
 import {VideoCard} from "@/pages/player/components/VideoCard.tsx";
 
+interface UserOverlaySettings {
+    css?: string;
+}
+
 export const CurrentlyPlaying = () => {
     const params = useParams() as { twitchId: string }
     const [currentTrack, setCurrentTrack] = useState<Video>();
-    // const [userConfig, setUserConfig] = useState<any>();
+    const [userSettings, setUserSettings] = useState<UserOverlaySettings>({});
 
     const initSocket = (twitchId: string) => {
         let socket = async (twitchId: string) => {
@@ -22,21 +26,40 @@ export const CurrentlyPlaying = () => {
         socket(twitchId)
     }
 
-    // const fetchUserConfig = async (twitchId: string) => {
-    //     const response = await fetch(`/api/overlays/user_config?twitch_id=${twitchId}`);
-    //     if (response.ok) {
-    //         const data = await response.json();
-    //         return data;
-    //     }
-    // }
+    const fetchUserSettings = async (twitchId: string) => {
+        try {
+            const response = await fetch(`/api/overlays/settings?twitch_id=${twitchId}&overlay_code=currently_playing`);
+            if (response.ok) {
+                const data = await response.json();
+                const settings = JSON.parse(data.settings || '{}');
+                setUserSettings(settings);
+            }
+        } catch (error) {
+            console.error('Failed to fetch user settings:', error);
+        }
+    }
 
     useEffect(() => {
         initSocket(params.twitchId)
-        // TODO : Add custom CSS to the overlay via the user config
-        // fetchUserConfig(params.twitchId).then((data) => {
-        //     setUserConfig(data)
-        // })
-    }, [])
+        fetchUserSettings(params.twitchId)
+    }, [params.twitchId])
+
+    // Apply custom CSS if provided
+    useEffect(() => {
+        if (userSettings.css) {
+            const styleElement = document.createElement('style');
+            styleElement.textContent = userSettings.css;
+            styleElement.id = 'custom-overlay-css';
+            document.head.appendChild(styleElement);
+
+            return () => {
+                const existingStyle = document.getElementById('custom-overlay-css');
+                if (existingStyle) {
+                    existingStyle.remove();
+                }
+            };
+        }
+    }, [userSettings]);
 
     return (
         <>
