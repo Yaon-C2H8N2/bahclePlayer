@@ -375,6 +375,7 @@ func (es *EventSub) listenToMessages() {
 		if es.onError != nil {
 			go es.onError(es, fmt.Errorf(errMsg))
 		}
+		return
 	}
 
 	go func() {
@@ -396,7 +397,12 @@ func (es *EventSub) listenToMessages() {
 			}
 
 			if !ok || content.error != nil {
-				errMsg := fmt.Sprintf("eventSub[%s] error reading message: %s", es.user.Username, content.error)
+				var errMsg string
+				if content.error != nil {
+					errMsg = fmt.Sprintf("eventSub[%s] error reading message: %v", es.user.Username, content.error)
+				} else {
+					errMsg = fmt.Sprintf("eventSub[%s] message channel closed", es.user.Username)
+				}
 				log.Println(errMsg)
 				if es.onError != nil {
 					go es.onError(es, fmt.Errorf(errMsg))
