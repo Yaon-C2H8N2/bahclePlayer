@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -24,6 +25,8 @@ type EventSub struct {
 	twitchUser          twitch.UserInfo
 	webSocketUrl        string
 	stopChan            chan struct{}
+	conn                *websocket.Conn
+	isConnected         bool
 }
 
 func GetEventSub(apiWrapper *ApiWrapper, user models.Users, webSocketUrl string) (*EventSub, error) {
@@ -45,12 +48,21 @@ func GetEventSub(apiWrapper *ApiWrapper, user models.Users, webSocketUrl string)
 }
 
 func (es *EventSub) Start() {
-	es.listenToMessages()
 	es.stopChan = make(chan struct{})
+	es.isConnected = false
+	es.listenToMessages()
 }
 
 func (es *EventSub) Stop() {
-	close(es.stopChan)
+	es.isConnected = false
+	if es.conn != nil {
+		es.conn.Close()
+		es.conn = nil
+	}
+	if es.stopChan != nil {
+		close(es.stopChan)
+		es.stopChan = nil
+	}
 }
 
 func (es *EventSub) OnError(callback func(es *EventSub, err error)) func() {
@@ -311,12 +323,28 @@ func (es *EventSub) subscribeToPollEvents() error {
 }
 
 func (es *EventSub) readMessageFromWebSocket(conn *websocket.Conn) (*twitch.BaseMessage, []byte, error) {
-	_, messageBytes, err := conn.ReadMessage()
-	if err != nil {
-		errMsg := fmt.Sprintf("eventSub[%s] couldn't read message", es.user.Username)
+	if conn == nil {
+		err := fmt.Errorf("websocket connection is nil")
+		errMsg := fmt.Sprintf("eventSub[%s] websocket connection is nil", es.user.Username)
 		log.Println(errMsg)
 		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errMsg))
+			go es.onError(es, err)
+		}
+		return nil, nil, err
+	}
+
+	_, messageBytes, err := conn.ReadMessage()
+	if err != nil {
+		// More detailed error logging
+		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			errMsg := fmt.Sprintf("eventSub[%s] unexpected websocket close: %v", es.user.Username, err)
+			log.Println(errMsg)
+		} else {
+			errMsg := fmt.Sprintf("eventSub[%s] couldn't read message: %v", es.user.Username, err)
+			log.Println(errMsg)
+		}
+		if es.onError != nil {
+			go es.onError(es, err)
 		}
 		return nil, nil, err
 	}
@@ -324,7 +352,7 @@ func (es *EventSub) readMessageFromWebSocket(conn *websocket.Conn) (*twitch.Base
 	var message = &twitch.BaseMessage{}
 	err = json.Unmarshal(messageBytes, message)
 	if err != nil {
-		errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling base message: %s", es.user.Username, messageBytes)
+		errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling base message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
 		log.Println(errMsg)
 		if es.onError != nil {
 			go es.onError(es, fmt.Errorf(errMsg))
@@ -347,6 +375,21 @@ func (es *EventSub) getMessageChannel(conn *websocket.Conn) chan chanContent {
 	go func() {
 		defer close(messageChan)
 		for {
+			select {
+			case <-es.stopChan:
+				return
+			default:
+			}
+
+			if conn == nil || !es.isConnected {
+				messageChan <- chanContent{
+					Message:      nil,
+					MessageBytes: nil,
+					error:        fmt.Errorf("websocket connection is not available"),
+				}
+				return
+			}
+
 			message, messageBytes, err := es.readMessageFromWebSocket(conn)
 
 			messageChan <- chanContent{
@@ -356,6 +399,7 @@ func (es *EventSub) getMessageChannel(conn *websocket.Conn) chan chanContent {
 			}
 
 			if err != nil {
+				es.isConnected = false
 				return
 			}
 		}
@@ -366,7 +410,35 @@ func (es *EventSub) getMessageChannel(conn *websocket.Conn) chan chanContent {
 
 func (es *EventSub) listenToMessages() {
 	fmt.Printf("eventSub[%s] starting message listener\n", es.user.Username)
-	//https://github.com/gorilla/websocket/blob/main/examples/echo/client.go
+
+	if es.webSocketUrl == "" {
+		errMsg := fmt.Sprintf("eventSub[%s] websocket URL is empty", es.user.Username)
+		log.Println(errMsg)
+		if es.onError != nil {
+			go es.onError(es, fmt.Errorf(errMsg))
+		}
+		return
+	}
+
+	parsedURL, err := url.Parse(es.webSocketUrl)
+	if err != nil {
+		errMsg := fmt.Sprintf("eventSub[%s] invalid websocket URL format: %s, error: %v", es.user.Username, es.webSocketUrl, err)
+		log.Println(errMsg)
+		if es.onError != nil {
+			go es.onError(es, fmt.Errorf(errMsg))
+		}
+		return
+	}
+
+	if parsedURL.Scheme != "ws" && parsedURL.Scheme != "wss" {
+		errMsg := fmt.Sprintf("eventSub[%s] invalid websocket URL scheme: %s (must be ws or wss)", es.user.Username, parsedURL.Scheme)
+		log.Println(errMsg)
+		if es.onError != nil {
+			go es.onError(es, fmt.Errorf(errMsg))
+		}
+		return
+	}
+
 	conn, _, err := websocket.DefaultDialer.Dial(es.webSocketUrl, nil)
 
 	if err != nil {
@@ -378,8 +450,17 @@ func (es *EventSub) listenToMessages() {
 		return
 	}
 
+	es.conn = conn
+	es.isConnected = true
+
 	go func() {
-		defer conn.Close()
+		defer func() {
+			es.isConnected = false
+			if es.conn != nil {
+				es.conn.Close()
+				es.conn = nil
+			}
+		}()
 
 		messageChan := es.getMessageChannel(conn)
 
@@ -404,13 +485,20 @@ func (es *EventSub) listenToMessages() {
 					errMsg = fmt.Sprintf("eventSub[%s] message channel closed", es.user.Username)
 				}
 				log.Println(errMsg)
-				if es.onError != nil {
-					go es.onError(es, fmt.Errorf(errMsg))
+				es.isConnected = false
+
+				select {
+				case <-es.stopChan:
+					fmt.Printf("eventSub[%s] stopping due to stop signal\n", es.user.Username)
+				default:
+					if es.onError != nil {
+						go es.onError(es, fmt.Errorf(errMsg))
+					}
+					if es.onRefresh != nil && es.webSocketUrl != "" {
+						go es.onRefresh(es, es.webSocketUrl)
+					}
 				}
-				if es.onRefresh != nil {
-					go es.onRefresh(es, os.Getenv("TWITCH_EVENTSUB_URL"))
-				}
-				continue
+				break loopiloop
 			}
 
 			message := content.Message
@@ -421,7 +509,7 @@ func (es *EventSub) listenToMessages() {
 				var welcomeMessage = &twitch.WelcomeMessage{}
 				err = json.Unmarshal(messageBytes, welcomeMessage)
 				if err != nil {
-					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling welcome message: %s", es.user.Username, messageBytes)
+					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling welcome message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
 					log.Println(errMsg)
 					if es.onError != nil {
 						go es.onError(es, fmt.Errorf(errMsg))
@@ -430,6 +518,7 @@ func (es *EventSub) listenToMessages() {
 				}
 
 				es.sessionId = welcomeMessage.Payload.Session.Id
+				fmt.Printf("eventSub[%s] received session_welcome, session_id: %s\n", es.user.Username, es.sessionId)
 				if es.onStarted != nil {
 					go es.onStarted(es)
 				}
@@ -438,7 +527,7 @@ func (es *EventSub) listenToMessages() {
 				var notificationMessage = &twitch.NotificationMessage{}
 				err = json.Unmarshal(messageBytes, notificationMessage)
 				if err != nil {
-					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling notification message: %s", es.user.Username, messageBytes)
+					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling notification message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
 					log.Println(errMsg)
 					if es.onError != nil {
 						go es.onError(es, fmt.Errorf(errMsg))
@@ -453,20 +542,34 @@ func (es *EventSub) listenToMessages() {
 				var reconnectMessage = &twitch.WelcomeMessage{}
 				err = json.Unmarshal(messageBytes, reconnectMessage)
 				if err != nil {
-					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling reconnect message: %s", es.user.Username, messageBytes)
+					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling reconnect message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
 					log.Println(errMsg)
 					if es.onError != nil {
 						go es.onError(es, fmt.Errorf(errMsg))
 					}
 					break loopiloop
 				}
-				if es.onRefresh != nil {
-					go es.onRefresh(es, reconnectMessage.Payload.Session.ReconnectUrl)
+
+				reconnectUrl := reconnectMessage.Payload.Session.ReconnectUrl
+				if reconnectUrl != "" {
+					if _, parseErr := url.Parse(reconnectUrl); parseErr != nil {
+						errMsg := fmt.Sprintf("eventSub[%s] invalid reconnect URL: %s, error: %v", es.user.Username, reconnectUrl, parseErr)
+						log.Println(errMsg)
+						if es.onError != nil {
+							go es.onError(es, fmt.Errorf(errMsg))
+						}
+						break loopiloop
+					}
 				}
-				fmt.Printf("eventSub[%s] received session_reconnect, reconnecting to %s\n", es.user.Username, reconnectMessage.Payload.Session.ReconnectUrl)
+
+				if es.onRefresh != nil {
+					go es.onRefresh(es, reconnectUrl)
+				}
+				fmt.Printf("eventSub[%s] received session_reconnect, reconnecting to %s\n", es.user.Username, reconnectUrl)
 				break
 			case "session_keepalive":
 				// This is a keepalive message, we can ignore it
+				fmt.Printf("eventSub[%s] received keepalive\n", es.user.Username)
 				break
 			default:
 				errMsg := fmt.Sprintf("eventSub[%s] received unknown message type: %s", es.user.Username, message.Metadata.MessageType)
