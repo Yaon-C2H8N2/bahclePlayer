@@ -2,23 +2,24 @@ package utils
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"log"
+	"os"
+	"time"
+
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"log"
-	"os"
-	"time"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 var Database *pgxpool.Pool
 
 func InitDatabase() {
 	connectionString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s",
+		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		os.Getenv("POSTGRES_USER"),
 		os.Getenv("POSTGRES_PASSWORD"),
 		os.Getenv("POSTGRES_URL"),
@@ -32,6 +33,7 @@ func InitDatabase() {
 	}
 
 	Database = pool
+	migrateDatabase(pool)
 }
 
 func GetConnection() *pgxpool.Conn {
@@ -56,21 +58,10 @@ func DoRequest(conn *pgxpool.Conn, query string, args ...any) pgx.Rows {
 	return rows
 }
 
-func Migrate() {
-	connectionString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("POSTGRES_USER"),
-		os.Getenv("POSTGRES_PASSWORD"),
-		os.Getenv("POSTGRES_URL"),
-		os.Getenv("POSTGRES_PORT"),
-		os.Getenv("POSTGRES_DB"),
-	)
+func migrateDatabase(pool *pgxpool.Pool) {
+	db := stdlib.OpenDBFromPool(pool)
+	fmt.Printf("Migrating database %s\n", pool.Config().ConnConfig.ConnString())
 
-	fmt.Printf("Migrating database %s\n", connectionString)
-	db, err := sql.Open("postgres", connectionString)
-	if err != nil {
-		log.Fatal(err)
-	}
 	defer func() {
 		if err := db.Close(); err != nil {
 			log.Fatal(err)

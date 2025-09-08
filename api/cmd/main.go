@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/services"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
-	"os"
-	"strings"
 )
 import "github.com/gin-gonic/gin"
 
@@ -20,7 +21,6 @@ func main() {
 		}
 	}
 
-	utils.Migrate()
 	utils.InitDatabase()
 	utils.InitValkey()
 
