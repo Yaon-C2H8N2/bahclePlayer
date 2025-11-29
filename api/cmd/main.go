@@ -14,13 +14,6 @@ import (
 import "github.com/gin-gonic/gin"
 
 func main() {
-	if os.Getenv("API_ENV") == "" {
-		err := utils.LoadEnv("../.env.development")
-		if err != nil {
-			panic("Failed to load env file")
-		}
-	}
-
 	utils.InitDatabase()
 	utils.InitValkey()
 
