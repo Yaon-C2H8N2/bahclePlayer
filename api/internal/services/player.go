@@ -4,19 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+
+	appContext "github.com/Yaon-C2H8N2/bahclePlayer/internal/context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/router"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"regexp"
 )
 
-func getPlayer(c *gin.Context, pm *controllers.PlayersManager) {
-	pm.CreatePlayer(c)
+type PlayerService struct {
+	GetPlayer           router.HandlerFunction `method:"GET" path:"/player"`
+	SetCurrentPlaying   router.HandlerFunction `method:"PUT" path:"/player/currentPlaying"`
+	AddVideos           router.HandlerFunction `method:"POST" path:"/addVideo"`
+	GetPlaylistAndQueue router.HandlerFunction `method:"GET" path:"/playlist"`
+	DeleteVideo         router.HandlerFunction `method:"DELETE" path:"/playlist"`
 }
 
-func getPlaylistAndQueue(c *gin.Context) {
+func GetPlayerService() *PlayerService {
+	return &PlayerService{
+		GetPlayer:           getPlayer,
+		SetCurrentPlaying:   setCurrentPlaying,
+		AddVideos:           addVideos,
+		GetPlaylistAndQueue: getPlaylistAndQueue,
+		DeleteVideo:         deleteVideo,
+	}
+}
+
+func getPlayer(c *gin.Context, appContext *appContext.AppContext) {
+	appContext.PlayersManager.CreatePlayer(c)
+}
+
+func getPlaylistAndQueue(c *gin.Context, appContext *appContext.AppContext) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
@@ -51,7 +72,7 @@ func getPlaylistAndQueue(c *gin.Context) {
 	})
 }
 
-func deleteVideo(c *gin.Context) {
+func deleteVideo(c *gin.Context, appContext *appContext.AppContext) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
@@ -77,7 +98,7 @@ func deleteVideo(c *gin.Context) {
 	})
 }
 
-func addVideos(c *gin.Context, pm *controllers.PlayersManager) {
+func addVideos(c *gin.Context, appContext *appContext.AppContext) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 	userContext, _ := c.Get("User")
@@ -136,7 +157,7 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager) {
 		return
 	}
 
-	conn := pm.GetConnFromTwitchId(user.TwitchId)
+	conn := appContext.PlayersManager.GetConnFromTwitchId(user.TwitchId)
 
 	if conn != nil {
 		for _, cn := range conn {
@@ -149,7 +170,7 @@ func addVideos(c *gin.Context, pm *controllers.PlayersManager) {
 	})
 }
 
-func setCurrentPlaying(c *gin.Context) {
+func setCurrentPlaying(c *gin.Context, appContext *appContext.AppContext) {
 	userContext, _ := c.Get("User")
 	user, _ := userContext.(models.Users)
 

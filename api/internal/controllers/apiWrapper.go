@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
-	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 )
 
 type ApiWrapper struct {

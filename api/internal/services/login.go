@@ -1,69 +1,27 @@
 package services
 
 import (
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/router"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
-var excludedPaths = map[string]bool{
-	"/player":          true,
-	"/login":           true,
-	"/logout":          true,
-	"/appinfo":         true,
-	"/overlays/events": true,
+type LoginService struct {
+	Login  router.HandlerFunction `method:"POST" path:"/login"`
+	Logout router.HandlerFunction `method:"GET" path:"/logout"`
 }
 
-func AuthMiddleware(c *gin.Context, aw *controllers.ApiWrapper) {
-	if excludedPaths[c.Request.URL.Path] {
-		c.Next()
-		return
+func GetLoginService() *LoginService {
+	return &LoginService{
+		Login:  login,
+		Logout: logout,
 	}
-
-	token := c.Request.Header.Get("Authorization")
-	if token == "" || len(token) < 7 {
-		c.JSON(401, gin.H{
-			"error": "missing access_token",
-		})
-		c.Abort()
-		return
-	}
-	token = token[7:]
-
-	parsedToken, err := models.ValidateToken(token)
-	if err != nil {
-		c.JSON(401, gin.H{
-			"error": err.Error(),
-		})
-		c.Abort()
-		return
-	}
-	tokenClaims := parsedToken.Claims.(*models.JWTClaims)
-	user, err := models.GetUserFromUserId(tokenClaims.UserId)
-	if err != nil {
-		c.JSON(401, gin.H{
-			"error": err.Error(),
-		})
-		c.Abort()
-		return
-	}
-
-	userInfo, err := aw.GetUserInfoFromToken(user.Token)
-	if err != nil {
-		c.JSON(401, gin.H{
-			"error": err.Error(),
-		})
-		c.Abort()
-		return
-	}
-
-	c.Set("User", user)
-	c.Set("TwitchUser", userInfo)
-	c.Next()
 }
 
-func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubPool *controllers.EventSubPool) {
+func login(c *gin.Context, appContext *context.AppContext) {
 	loginRequest := models.LoginRequest{}
 	err := c.BindJSON(&loginRequest)
 
@@ -112,7 +70,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubPool *controllers
 		`
 		utils.DoRequest(conn, sql, loginRequest.Code)
 
-		userInfo, err := aw.GetUserInfoFromToken(userToken.AccessToken)
+		userInfo, err := appContext.ApiWrapper.GetUserInfoFromToken(userToken.AccessToken)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": err.Error(),
@@ -134,7 +92,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubPool *controllers
 			})
 			return
 		}
-		err = eventSubPool.AddEventSub(aw, user)
+		err = appContext.EventSubPool.AddEventSub(appContext.ApiWrapper, user)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "Failed to initialize EventSub: " + err.Error(),
@@ -158,7 +116,7 @@ func login(c *gin.Context, aw *controllers.ApiWrapper, eventSubPool *controllers
 	})
 }
 
-func logout(c *gin.Context) {
+func logout(c *gin.Context, appContext *context.AppContext) {
 	c.Header("Set-Cookie", "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
 	c.JSON(200, gin.H{
 		"message": "Logged out",

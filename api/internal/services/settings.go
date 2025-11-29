@@ -2,20 +2,34 @@ package services
 
 import (
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
+
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/router"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
-func getRewardsIds(c *gin.Context, aw *controllers.ApiWrapper) {
+type SettingsService struct {
+	SaveSettings  router.HandlerFunction `method:"GET" path:"/settings"`
+	GetRewardsIds router.HandlerFunction `method:"GET" path:"/rewards"`
+}
+
+func GetSettingsService() *SettingsService {
+	return &SettingsService{
+		SaveSettings:  saveSettings,
+		GetRewardsIds: getRewardsIds,
+	}
+}
+
+func getRewardsIds(c *gin.Context, appContext *context.AppContext) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 	userContext, _ := c.Get("User")
 	user, _ := userContext.(models.Users)
 
-	rewards, err := aw.GetChannelRewards(user.Token, userInfo.ID)
+	rewards, err := appContext.ApiWrapper.GetChannelRewards(user.Token, userInfo.ID)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -54,7 +68,7 @@ func getSettings(user twitch.UserInfo) []struct{ Config, Value string } {
 	return config
 }
 
-func saveSettings(c *gin.Context, aw *controllers.ApiWrapper) {
+func saveSettings(c *gin.Context, appContext *context.AppContext) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 

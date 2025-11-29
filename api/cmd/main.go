@@ -6,8 +6,10 @@ import (
 	"os"
 	"strings"
 
+	internalContext "github.com/Yaon-C2H8N2/bahclePlayer/internal/context"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/controllers"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/router"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/services"
 	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 )
@@ -57,11 +59,29 @@ func main() {
 	fmt.Println("EventSubs initialized")
 	playersManager := controllers.DefaultPlayersManager(apiWrapper)
 
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		services.AuthMiddleware(c, apiWrapper)
+	ginRouter := gin.New()
+	ginRouter.Use(func(c *gin.Context) {
+		router.AuthMiddleware(c, apiWrapper)
 	}, gin.Recovery())
-	services.MapRoutes(router, playersManager, apiWrapper, eventSubPool, &appStatus)
+
+	appContext := &internalContext.AppContext{
+		ApiWrapper:     apiWrapper,
+		EventSubPool:   eventSubPool,
+		PlayersManager: playersManager,
+		AppStatus:      &appStatus,
+	}
+	servicesList := []any{
+		services.GetLoginService(),
+		services.GetPlayerService(),
+		services.GetOverlaysService(),
+		services.GetSettingsService(),
+	}
+	for _, service := range servicesList {
+		router.RegisterService(ginRouter, appContext, service)
+	}
+	ginRouter.GET("/appinfo", func(c *gin.Context) {
+		c.JSON(200, appContext.AppStatus)
+	})
 
 	go func() {
 		for msg := range sub.Channel() {
@@ -100,7 +120,7 @@ func main() {
 	}()
 
 	appStatus.Started = true
-	err = router.Run(fmt.Sprintf(":%d", 8081))
+	err = ginRouter.Run(fmt.Sprintf(":%d", 8081))
 	if err != nil {
 		panic(err)
 	}
