@@ -34,22 +34,20 @@ func main() {
 	if appTokenErr != nil {
 		panic(appTokenErr)
 	}
-	apiWrapper := controllers.GetApiWrapper()
-	apiWrapper.SetClientId(os.Getenv("TWITCH_CLIENT_ID"))
-	apiWrapper.SetAppToken(appToken)
+	apiWrapper := controllers.GetApiWrapper(appToken, os.Getenv("TWITCH_CLIENT_ID"))
 
 	users, err := models.GetAllUsers()
 	if err != nil {
 		panic(err)
 	}
 
-	eventSubPool := controllers.GetEventSubPool(os.Getenv("TWITCH_EVENTSUB_WEBSOCKET_URL"))
+	eventSubPool := controllers.GetEventSubPool(os.Getenv("TWITCH_EVENTSUB_WEBSOCKET_URL"), apiWrapper)
 	for _, user := range users {
 		if user.Token == "" {
 			continue
 		}
 		fmt.Printf("Initializing subscriptions for user %s\n", user.Username)
-		err = eventSubPool.AddEventSub(apiWrapper, user)
+		err = eventSubPool.AddEventSub(user)
 		if err != nil {
 			fmt.Printf("Error initializing EventSub for user %s: %s\n", user.Username, err)
 			continue

@@ -3,15 +3,16 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
-	"github.com/gorilla/websocket"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/gorilla/websocket"
 )
 
 type EventSub struct {
@@ -62,29 +63,6 @@ func (es *EventSub) Stop() {
 	if es.stopChan != nil {
 		close(es.stopChan)
 		es.stopChan = nil
-	}
-}
-
-func (es *EventSub) OnError(callback func(es *EventSub, err error)) func() {
-	es.onError = callback
-
-	return func() {
-		es.onError = nil
-	}
-}
-
-func (es *EventSub) OnStarted(callback func(es *EventSub)) func() {
-	es.onStarted = callback
-
-	return func() {
-		es.onStarted = nil
-	}
-}
-
-func (es *EventSub) OnRefresh(callback func(es *EventSub, url string)) func() {
-	es.onRefresh = callback
-	return func() {
-		es.onRefresh = nil
 	}
 }
 

@@ -2,23 +2,26 @@ package controllers
 
 import (
 	"fmt"
+
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 )
 
 type EventSubPool struct {
 	pool                map[string]*EventSub
 	defaultWebSocketUrl string
+	apiWrapper          *ApiWrapper
 }
 
-func GetEventSubPool(defaultWebSocketUrl string) *EventSubPool {
+func GetEventSubPool(defaultWebSocketUrl string, apiWrapper *ApiWrapper) *EventSubPool {
 	return &EventSubPool{
 		pool:                make(map[string]*EventSub),
 		defaultWebSocketUrl: defaultWebSocketUrl,
+		apiWrapper:          apiWrapper,
 	}
 }
 
-func (esp *EventSubPool) AddEventSub(apiWrapper *ApiWrapper, user models.Users) error {
-	es, err := GetEventSub(apiWrapper, user, esp.defaultWebSocketUrl)
+func (esp *EventSubPool) AddEventSub(user models.Users) error {
+	es, err := GetEventSub(esp.apiWrapper, user, esp.defaultWebSocketUrl)
 	if err != nil {
 		tokenResponse, err := RefreshUserToken(user.RefreshToken)
 		if err != nil {
@@ -33,7 +36,7 @@ func (esp *EventSubPool) AddEventSub(apiWrapper *ApiWrapper, user models.Users) 
 			fmt.Printf("Error updating user %s: %s\n", oldUser.Username, err)
 			return err
 		}
-		es, err = GetEventSub(apiWrapper, user, esp.defaultWebSocketUrl)
+		es, err = GetEventSub(esp.apiWrapper, user, esp.defaultWebSocketUrl)
 		if err != nil {
 			fmt.Printf("Error getting EventSub for user %s: %s\n", user.Username, err)
 			return err

@@ -92,7 +92,7 @@ func login(c *gin.Context, appContext *context.AppContext) {
 			})
 			return
 		}
-		err = appContext.EventSubPool.AddEventSub(appContext.ApiWrapper, user)
+		err = appContext.EventSubPool.AddEventSub(user)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "Failed to initialize EventSub: " + err.Error(),
