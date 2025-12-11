@@ -1,0 +1,16 @@
+meta {
+  name: Update overlay settings
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://{{api_host}}/overlays/settings
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

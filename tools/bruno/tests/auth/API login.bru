@@ -1,0 +1,22 @@
+meta {
+  name: API login
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://{{api_host}}/login
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "Code": "{{twitch_auth_code}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

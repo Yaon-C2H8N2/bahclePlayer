@@ -1,0 +1,16 @@
+meta {
+  name: Set currently playing
+  type: http
+  seq: 2
+}
+
+put {
+  url: http://{{api_host}}/player/currentPlaying
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

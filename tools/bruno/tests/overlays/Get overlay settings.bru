@@ -1,0 +1,16 @@
+meta {
+  name: Get overlay settings
+  type: http
+  seq: 3
+}
+
+get {
+  url: http://{{api_host}}/overlays/settings
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

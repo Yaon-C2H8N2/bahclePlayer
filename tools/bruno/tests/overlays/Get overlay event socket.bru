@@ -1,0 +1,19 @@
+meta {
+  name: Get overlay event socket
+  type: ws
+  seq: 2
+}
+
+ws {
+  url: ws://{{api_host}}/overlays/events
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: message 1
+  type: json
+  content: '''
+    {}
+  '''
+}

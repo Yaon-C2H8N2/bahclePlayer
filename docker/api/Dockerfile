@@ -22,7 +22,7 @@ COPY ../.env /.env
 
 RUN go build -gcflags "all=-N -l" -o /app/build/api ./cmd/
 
-CMD ["dlv", "exec", "/app/build/api", "--headless=true", "--listen=:2345", "--api-version=2", "--accept-multiclient"]
+CMD ["dlv", "exec", "/app/build/api", "--headless=true", "--listen=:2345", "--accept-multiclient", "--continue"]
 EXPOSE 2345
 
 FROM base AS builder
