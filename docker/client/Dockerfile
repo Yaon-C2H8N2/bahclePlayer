@@ -7,7 +7,7 @@ FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS base
 WORKDIR /app
 
 COPY client/package.json client/package-lock.json ./
-RUN npm install
+RUN npm ci
 
 COPY client/ .
 
