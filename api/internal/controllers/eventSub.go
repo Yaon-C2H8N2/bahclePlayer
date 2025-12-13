@@ -472,11 +472,6 @@ func (es *EventSub) readLoop(ctx context.Context, messageChan chan chanContent) 
 			error:        err,
 		}:
 		}
-
-		if err != nil {
-			es.dispatchToEventListeners(EventListenerOnError, err)
-			return
-		}
 	}
 }
 
