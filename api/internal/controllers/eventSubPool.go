@@ -43,16 +43,23 @@ func (esp *EventSubPool) AddEventSub(user models.Users) error {
 		}
 	}
 
-	es.onStarted = func(this *EventSub) {
-		this.DropAllSubscriptions()
-		this.InitSubscriptions()
+	var onStart = func(this *EventSub, eventData any) {
+		fmt.Printf("EventSub started for user %s\n", this.user.Username)
 	}
-	es.onRefresh = func(this *EventSub, reconnectUrl string) {
-		esp.refreshEventSub(this, reconnectUrl)
+	var onRefresh = func(this *EventSub, eventData any) {
+		fmt.Printf("EventSub refreshed for user %s\n", this.user.Username)
 	}
-	es.onError = func(this *EventSub, err error) {
-		//todo : error logic
+	var onError = func(this *EventSub, eventData any) {
+		err, _ := eventData.(error)
+		fmt.Printf("EventSub error for user %s: %s\n", this.user.Username, err)
 	}
+	var onStop = func(this *EventSub, eventData any) {
+		fmt.Printf("EventSub stopped for user %s\n", this.user.Username)
+	}
+	es.AddEventListener(EventListenerOnStarted, onStart)
+	es.AddEventListener(EventListenerOnRefresh, onRefresh)
+	es.AddEventListener(EventListenerOnError, onError)
+	es.AddEventListener(EventListenerOnStopped, onStop)
 	es.Start()
 
 	esp.pool[user.TwitchId] = es
@@ -69,43 +76,5 @@ func (esp *EventSubPool) UpdateUser(user models.Users) error {
 		return fmt.Errorf("error updating user %s: %s", user.Username, err)
 	}
 
-	//esp.refreshEventSub(eventSub, esp.defaultWebSocketUrl) // Uncomment to force refresh the EventSub along the user update
-
 	return nil
-}
-
-func (esp *EventSubPool) refreshEventSub(oldEventSub *EventSub, reconnectUrl string) {
-	if oldEventSub == nil {
-		return
-	}
-	fmt.Printf("Refreshing EventSub for user %s\n", oldEventSub.user.Username)
-
-	oldEventSub.Stop()
-	if reconnectUrl == "" {
-		fmt.Printf("Error refreshing EventSub for user %s: reconnect URL is empty, using default\n", oldEventSub.user.Username)
-		reconnectUrl = esp.defaultWebSocketUrl
-	}
-
-	newEventSub, err := GetEventSub(oldEventSub.apiWrapper, oldEventSub.user, reconnectUrl)
-	if err != nil {
-		fmt.Printf("Error refreshing EventSub for user %s: %s\n", oldEventSub.user.Username, err)
-		if reconnectUrl != esp.defaultWebSocketUrl {
-			fmt.Printf("Retrying with default WebSocket URL for user %s\n", oldEventSub.user.Username)
-			newEventSub, err = GetEventSub(oldEventSub.apiWrapper, oldEventSub.user, esp.defaultWebSocketUrl)
-			if err != nil {
-				fmt.Printf("Error refreshing EventSub with default URL for user %s: %s\n", oldEventSub.user.Username, err)
-				return
-			}
-		} else {
-			return
-		}
-	}
-	newEventSub.onStarted = func(this *EventSub) {
-		oldEventSub.DropAllSubscriptions()
-		this.InitSubscriptions()
-		esp.pool[oldEventSub.user.TwitchId] = newEventSub
-	}
-	newEventSub.onRefresh = oldEventSub.onRefresh
-	newEventSub.onError = oldEventSub.onError
-	newEventSub.Start()
 }

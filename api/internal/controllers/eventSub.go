@@ -1,153 +1,195 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
 	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
 	"github.com/gorilla/websocket"
 )
 
+type EventListenerKeys int
+
+const (
+	EventListenerOnStarted EventListenerKeys = iota
+	EventListenerOnStopped
+	EventListenerOnError
+	EventListenerOnRefresh
+)
+
 type EventSub struct {
-	onStarted           func(es *EventSub)
-	onError             func(es *EventSub, error error)
-	onRefresh           func(es *EventSub, url string)
 	sessionId           string
 	apiWrapper          *ApiWrapper
 	notificationHandler *NotificationHandler
 	user                models.Users
 	twitchUser          twitch.UserInfo
 	webSocketUrl        string
-	stopChan            chan struct{}
-	conn                *websocket.Conn
-	isConnected         bool
+	lastEventListenerId int
+	eventListeners      map[EventListenerKeys]map[int]func(*EventSub, any)
+	eventListenersMutex sync.Mutex
+	mainCtxCancel       context.CancelFunc
+	loopCtxCancel       context.CancelFunc
 }
 
+// GetEventSub creates a new twitch EventSub instance. It uses the WebSocket protocol for receiving events.
+// Returned errors are only for initialization errors.
+// Further error handling must be handled via event listeners. See EventSub.AddEventListener for more details.
+// Call EventSub.Start() to start the EventSub instance.
 func GetEventSub(apiWrapper *ApiWrapper, user models.Users, webSocketUrl string) (*EventSub, error) {
 	twitchUser, err := apiWrapper.GetUserInfoFromToken(user.Token)
 
 	if err != nil {
-		fmt.Println("Error getting user info from token:", err)
 		return nil, err
 	}
+
 	var newEventSub = &EventSub{
-		user:         user,
-		twitchUser:   twitchUser,
-		apiWrapper:   apiWrapper,
-		webSocketUrl: webSocketUrl,
+		user:                user,
+		twitchUser:          twitchUser,
+		apiWrapper:          apiWrapper,
+		webSocketUrl:        webSocketUrl,
+		lastEventListenerId: 0,
+		eventListeners:      make(map[EventListenerKeys]map[int]func(*EventSub, any)),
+		eventListenersMutex: sync.Mutex{},
 	}
 
 	newEventSub.notificationHandler = GetNotificationHandler(apiWrapper, user.Token)
 	return newEventSub, nil
 }
 
-func (es *EventSub) Start() {
-	es.stopChan = make(chan struct{})
-	es.isConnected = false
-	es.listenToMessages()
+// Helper function to read the initial infos of a message from the websocket connection
+func readMessageFromWebSocket(conn *websocket.Conn) (*twitch.BaseMessage, []byte, error) {
+	var formattedErr error
+	if conn == nil {
+		formattedErr = fmt.Errorf("websocket connection is nil")
+		return nil, nil, formattedErr
+	}
+
+	_, messageBytes, err := conn.ReadMessage()
+	if err != nil {
+		if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+			formattedErr = fmt.Errorf("unexpected websocket closure: %v", err)
+		} else {
+			formattedErr = fmt.Errorf("couldn't read message: %v", err)
+		}
+		return nil, nil, formattedErr
+	}
+
+	var message = &twitch.BaseMessage{}
+	err = json.Unmarshal(messageBytes, message)
+	if err != nil {
+		formattedErr = fmt.Errorf("error unmarshalling base message: %v, raw data: %s", err, string(messageBytes))
+		return nil, messageBytes, formattedErr
+	}
+
+	return message, messageBytes, nil
 }
 
-func (es *EventSub) Stop() {
-	es.isConnected = false
-	if es.conn != nil {
-		es.conn.Close()
-		es.conn = nil
-	}
-	if es.stopChan != nil {
-		close(es.stopChan)
-		es.stopChan = nil
-	}
-}
-
-func (es *EventSub) GetAllSubscriptionsForTwitchUser() (twitch.SubscriptionResponse, error) {
+// Helper function to get all current EventSub subscriptions for a Twitch user from the Twitch API
+func getAllSubscriptionsForTwitchUser(user models.Users) (twitch.SubscriptionResponse, error) {
 	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", twitchUrl+"?user_id="+es.twitchUser.ID, nil)
+	req, err := http.NewRequest("GET", twitchUrl+"?user_id="+user.TwitchId, nil)
 	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return twitch.SubscriptionResponse{}, err
+		return twitch.SubscriptionResponse{}, fmt.Errorf("error creating request: %v", err)
 	}
 
-	req.Header.Add("Authorization", "Bearer "+es.user.Token)
+	req.Header.Add("Authorization", "Bearer "+user.Token)
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
 	req.Header.Add("Content-Type", "application/json")
 
 	res, err := httpClient.Do(req)
 	if err != nil {
-		fmt.Println("Error making request:", err)
-		return twitch.SubscriptionResponse{}, err
+		return twitch.SubscriptionResponse{}, fmt.Errorf("error making request: %v", err)
 	}
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 
 	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return twitch.SubscriptionResponse{}, err
+		return twitch.SubscriptionResponse{}, fmt.Errorf("error reading response: %v", err)
 	}
 
 	subscriptionResponse := &twitch.SubscriptionResponse{}
 	err = json.Unmarshal(body, subscriptionResponse)
 	if err != nil {
-		fmt.Println("Error unmarshalling response:", err)
-		return twitch.SubscriptionResponse{}, err
+		return twitch.SubscriptionResponse{}, fmt.Errorf("error unmarshalling response: %v, raw data: %s", err, string(body))
 	}
 	return *subscriptionResponse, nil
 }
 
-func (es *EventSub) DropAllSubscriptions() {
-	subscriptionResponse, err := es.GetAllSubscriptionsForTwitchUser()
-	if err != nil {
-		fmt.Println("Error getting all subscriptions:", err)
-		return
-	}
-
-	fmt.Printf("eventSub[%s] dropping %d subscriptions\n", es.user.Username, len(subscriptionResponse.Data))
-	for _, subscription := range subscriptionResponse.Data {
-		if subscription.Status == "enabled" {
-			err = es.unsubscribeFromEvent(subscription.ID)
-			if err != nil {
-				fmt.Println("Error unsubscribing from event:", err)
-			}
+// Start listens for Twitch EventSub events. It must be called after creating the EventSub instance with GetEventSub.
+// Errors during operation are dispatched to the EventListenerOnError event listeners.
+// To stop listening for events, call EventSub.Stop().
+func (es *EventSub) Start() {
+	unsub := es.AddEventListener(EventListenerOnStarted, func(es *EventSub, data any) {
+		err := es.dropAllSubscriptions()
+		if err != nil {
+			es.dispatchToEventListeners(EventListenerOnError, fmt.Errorf("error dropping subscriptions: %v", err))
+			return
 		}
+		err = es.initSubscriptions()
+		if err != nil {
+			es.dispatchToEventListeners(EventListenerOnError, fmt.Errorf("error initializing subscriptions: %v", err))
+			return
+		}
+	})
+
+	messageChan := make(chan chanContent)
+
+	mainCtx, mainCtxCancel := context.WithCancel(context.Background())
+	context.AfterFunc(mainCtx, func() {
+		unsub()
+		close(messageChan)
+	})
+	es.mainCtxCancel = mainCtxCancel
+
+	es.startLoops(mainCtx, messageChan)
+}
+
+// Stop forces the EventSub instance to stop listening for events.
+// Once stopped, the EventSub instance shouldn't be restarted. A new instance should be created instead.
+func (es *EventSub) Stop() {
+	if es.mainCtxCancel != nil {
+		es.mainCtxCancel()
 	}
 }
 
-func (es *EventSub) InitSubscriptions() {
-	var err error
-	err = es.subscribeToMessageEvents()
-	if err != nil {
-		errorMessage := fmt.Sprintf("Error subscribing to message events with token %s: %s", es.user.Token, err)
-		fmt.Printf(errorMessage)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errorMessage))
-		}
+// AddEventListener adds an event listener for the specified event key.
+// The listener function will be called with the EventSub instance and event data when the event occurs.
+// It returns a cancel function that can be called to remove the event listener.
+// TODO : further document which events send what data.
+func (es *EventSub) AddEventListener(key EventListenerKeys, listener func(*EventSub, any)) func() {
+	es.eventListenersMutex.Lock()
+	defer es.eventListenersMutex.Unlock()
+
+	if es.eventListeners[key] == nil {
+		es.eventListeners[key] = make(map[int]func(*EventSub, any))
 	}
-	err = es.subscribeToRedemptionEvents()
-	if err != nil {
-		errorMessage := fmt.Sprintf("Error subscribing to redemption events with token %s: %s\n", es.user.Token, err)
-		fmt.Printf(errorMessage)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errorMessage))
-		}
-	}
-	err = es.subscribeToPollEvents()
-	if err != nil {
-		errorMessage := fmt.Sprintf("Error subscribing to poll events with token %s: %s\n", es.user.Token, err)
-		fmt.Printf(errorMessage)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errorMessage))
-		}
+
+	listenerId := es.lastEventListenerId + 1
+	es.lastEventListenerId = listenerId
+
+	es.eventListeners[key][listenerId] = listener
+
+	return func() {
+		es.eventListenersMutex.Lock()
+		defer es.eventListenersMutex.Unlock()
+
+		delete(es.eventListeners[key], listenerId)
 	}
 }
 
+// SetUser updates the EventSub instance to use a new user.
+// This is useful when the user's token has been refreshed.
+// It returns an error if the user information cannot be retrieved.
 func (es *EventSub) SetUser(user models.Users) error {
 	es.user = user
 
@@ -160,6 +202,83 @@ func (es *EventSub) SetUser(user models.Users) error {
 	return nil
 }
 
+// Internal function to start the read and process loops. Should not be called directly.
+func (es *EventSub) startLoops(ctx context.Context, messageChan chan chanContent) {
+	loopCtx, loopCtxCancel := context.WithCancel(ctx)
+	context.AfterFunc(loopCtx, func() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			es.startLoops(ctx, messageChan)
+		}
+	})
+
+	es.loopCtxCancel = loopCtxCancel
+
+	go es.readLoop(loopCtx, messageChan)
+	go es.processLoop(loopCtx, messageChan)
+}
+
+// Internal function to dispatch events to registered event listeners. Non-blocking.
+func (es *EventSub) dispatchToEventListeners(key EventListenerKeys, data any) {
+	go func() {
+		es.eventListenersMutex.Lock()
+		defer es.eventListenersMutex.Unlock()
+
+		eventListenersCopy := make(map[int]func(*EventSub, any))
+		for id, listener := range es.eventListeners[key] {
+			eventListenersCopy[id] = listener
+		}
+
+		for _, listener := range eventListenersCopy {
+			go listener(es, data)
+		}
+	}()
+}
+
+// Internal function to drop all current EventSub subscriptions for the Twitch user.
+func (es *EventSub) dropAllSubscriptions() error {
+	subscriptionResponse, err := getAllSubscriptionsForTwitchUser(es.user)
+	if err != nil {
+		return fmt.Errorf("error getting all subscriptions: %v", err)
+	}
+
+	var unsubscribeErrors []error
+	for _, subscription := range subscriptionResponse.Data {
+		if subscription.Status == "enabled" {
+			err = es.unsubscribeFromEvent(subscription.ID)
+			if err != nil {
+				unsubscribeErrors = append(unsubscribeErrors, fmt.Errorf("error unsubscribing from %s: %v", subscription.Type, err))
+			}
+		}
+	}
+
+	if len(unsubscribeErrors) > 0 {
+		return fmt.Errorf("errors occurred while unsubscribing: %v", unsubscribeErrors)
+	}
+	return nil
+}
+
+// Internal function to initialize EventSub subscriptions for the Twitch user.
+func (es *EventSub) initSubscriptions() error {
+	var subscriptionMethods = []func() error{
+		es.subscribeToMessageEvents,
+		es.subscribeToRedemptionEvents,
+		es.subscribeToPollEvents,
+	}
+
+	for _, method := range subscriptionMethods {
+		err := method()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Internal function to unsubscribe from a specific EventSub subscription by ID.
 func (es *EventSub) unsubscribeFromEvent(subscriptionId string) error {
 	twitchUrl := os.Getenv("TWITCH_EVENTSUB_URL")
 
@@ -181,8 +300,8 @@ func (es *EventSub) unsubscribeFromEvent(subscriptionId string) error {
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return err
+		errMsg := fmt.Errorf("error reading response: %v", err)
+		return errMsg
 	}
 
 	if res.StatusCode != 204 {
@@ -213,15 +332,13 @@ func (es *EventSub) subscribeToEvent(request twitch.SubscriptionRequest) error {
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return err
+		return fmt.Errorf("error reading response: %v", err)
 	}
 
 	subcriptionResponse := &twitch.SubscriptionResponse{}
 	err = json.Unmarshal(body, subcriptionResponse)
 	if err != nil {
-		fmt.Println("Error unmarshalling response:", err)
-		return err
+		return fmt.Errorf("error unmarshalling response: %v, raw data: %s", err, string(body))
 	}
 	if len(subcriptionResponse.Data) > 0 {
 		if !(subcriptionResponse.Data[0].Status == "enabled") {
@@ -234,6 +351,7 @@ func (es *EventSub) subscribeToEvent(request twitch.SubscriptionRequest) error {
 	}
 }
 
+// Internal function to subscribe to channel chat message events.
 func (es *EventSub) subscribeToMessageEvents() error {
 	var data = twitch.SubscriptionRequest{
 		Type:    "channel.chat.message",
@@ -255,6 +373,7 @@ func (es *EventSub) subscribeToMessageEvents() error {
 	return nil
 }
 
+// Internal function to subscribe to channel points redemption events.
 func (es *EventSub) subscribeToRedemptionEvents() error {
 	broadcasterId, err := es.apiWrapper.GetUserInfoFromToken(es.user.Token)
 	if err != nil {
@@ -280,6 +399,7 @@ func (es *EventSub) subscribeToRedemptionEvents() error {
 	return nil
 }
 
+// Internal function to subscribe to channel poll end events.
 func (es *EventSub) subscribeToPollEvents() error {
 	var data = twitch.SubscriptionRequest{
 		Type:    "channel.poll.end",
@@ -300,264 +420,154 @@ func (es *EventSub) subscribeToPollEvents() error {
 	return nil
 }
 
-func (es *EventSub) readMessageFromWebSocket(conn *websocket.Conn) (*twitch.BaseMessage, []byte, error) {
-	if conn == nil {
-		err := fmt.Errorf("websocket connection is nil")
-		errMsg := fmt.Sprintf("eventSub[%s] websocket connection is nil", es.user.Username)
-		log.Println(errMsg)
-		if es.onError != nil {
-			go es.onError(es, err)
-		}
-		return nil, nil, err
-	}
-
-	_, messageBytes, err := conn.ReadMessage()
-	if err != nil {
-		// More detailed error logging
-		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-			errMsg := fmt.Sprintf("eventSub[%s] unexpected websocket close: %v", es.user.Username, err)
-			log.Println(errMsg)
-		} else {
-			errMsg := fmt.Sprintf("eventSub[%s] couldn't read message: %v", es.user.Username, err)
-			log.Println(errMsg)
-		}
-		if es.onError != nil {
-			go es.onError(es, err)
-		}
-		return nil, nil, err
-	}
-
-	var message = &twitch.BaseMessage{}
-	err = json.Unmarshal(messageBytes, message)
-	if err != nil {
-		errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling base message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
-		log.Println(errMsg)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errMsg))
-		}
-		return nil, messageBytes, err
-	}
-
-	return message, messageBytes, nil
-}
-
+// Internal struct to pass data between read and process loops.
 type chanContent struct {
 	Message      *twitch.BaseMessage
 	MessageBytes []byte
 	error        error
 }
 
-func (es *EventSub) getMessageChannel(conn *websocket.Conn) chan chanContent {
-	messageChan := make(chan chanContent)
-
-	go func() {
-		defer close(messageChan)
-		for {
-			select {
-			case <-es.stopChan:
-				return
-			default:
-			}
-
-			if conn == nil || !es.isConnected {
-				messageChan <- chanContent{
-					Message:      nil,
-					MessageBytes: nil,
-					error:        fmt.Errorf("websocket connection is not available"),
-				}
-				return
-			}
-
-			message, messageBytes, err := es.readMessageFromWebSocket(conn)
-
-			messageChan <- chanContent{
-				Message:      message,
-				MessageBytes: messageBytes,
-				error:        err,
-			}
-
-			if err != nil {
-				es.isConnected = false
-				return
-			}
-		}
-	}()
-
-	return messageChan
-}
-
-func (es *EventSub) listenToMessages() {
-	fmt.Printf("eventSub[%s] starting message listener\n", es.user.Username)
-
+// Main readLoop to read messages from the Twitch WebSocket connection.
+// Messages are sent to the provided messageChan for processing.
+// The loop runs until the provided context is cancelled.
+// Should not be called directly.
+func (es *EventSub) readLoop(ctx context.Context, messageChan chan chanContent) {
 	if es.webSocketUrl == "" {
-		errMsg := fmt.Sprintf("eventSub[%s] websocket URL is empty", es.user.Username)
-		log.Println(errMsg)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errMsg))
-		}
+		errMsg := fmt.Errorf("websocket URL is empty")
+		es.dispatchToEventListeners(EventListenerOnError, errMsg)
 		return
 	}
 
 	parsedURL, err := url.Parse(es.webSocketUrl)
 	if err != nil {
-		errMsg := fmt.Sprintf("eventSub[%s] invalid websocket URL format: %s, error: %v", es.user.Username, es.webSocketUrl, err)
-		log.Println(errMsg)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errMsg))
-		}
+		errMsg := fmt.Errorf("invalid websocket URL format: %s, error: %v", es.webSocketUrl, err)
+		es.dispatchToEventListeners(EventListenerOnError, errMsg)
 		return
 	}
 
 	if parsedURL.Scheme != "ws" && parsedURL.Scheme != "wss" {
-		errMsg := fmt.Sprintf("eventSub[%s] invalid websocket URL scheme: %s (must be ws or wss)", es.user.Username, parsedURL.Scheme)
-		log.Println(errMsg)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errMsg))
-		}
+		errMsg := fmt.Errorf("invalid websocket URL scheme: %s (must be ws or wss)", parsedURL.Scheme)
+		es.dispatchToEventListeners(EventListenerOnError, errMsg)
 		return
 	}
 
 	conn, _, err := websocket.DefaultDialer.Dial(es.webSocketUrl, nil)
+	defer conn.Close()
 
 	if err != nil {
-		errMsg := fmt.Sprintf("eventSub[%s] couldn't dial twitch websocket: %s", es.user.Username, err)
-		log.Println(errMsg)
-		if es.onError != nil {
-			go es.onError(es, fmt.Errorf(errMsg))
-		}
+		errMsg := fmt.Errorf("couldn't dial twitch websocket: %s", err)
+		es.dispatchToEventListeners(EventListenerOnError, errMsg)
 		return
 	}
 
-	es.conn = conn
-	es.isConnected = true
+	for {
+		message, messageBytes, err := readMessageFromWebSocket(conn)
 
-	go func() {
-		defer func() {
-			es.isConnected = false
-			if es.conn != nil {
-				es.conn.Close()
-				es.conn = nil
-			}
-		}()
-
-		messageChan := es.getMessageChannel(conn)
-
-	loopiloop:
-		for {
-			var content chanContent
-			var ok bool
-
-			select {
-			case <-es.stopChan:
-				fmt.Printf("eventSub[%s] stopping message listener\n", es.user.Username)
-				break loopiloop
-			case content, ok = <-messageChan:
-				break
-			}
-
-			if !ok || content.error != nil {
-				var errMsg string
-				if content.error != nil {
-					errMsg = fmt.Sprintf("eventSub[%s] error reading message: %v", es.user.Username, content.error)
-				} else {
-					errMsg = fmt.Sprintf("eventSub[%s] message channel closed", es.user.Username)
-				}
-				log.Println(errMsg)
-				es.isConnected = false
-
-				select {
-				case <-es.stopChan:
-					fmt.Printf("eventSub[%s] stopping due to stop signal\n", es.user.Username)
-				default:
-					if es.onError != nil {
-						go es.onError(es, fmt.Errorf(errMsg))
-					}
-					if es.onRefresh != nil && es.webSocketUrl != "" {
-						go es.onRefresh(es, es.webSocketUrl)
-					}
-				}
-				break loopiloop
-			}
-
-			message := content.Message
-			messageBytes := content.MessageBytes
-
-			switch message.Metadata.MessageType {
-			case "session_welcome":
-				var welcomeMessage = &twitch.WelcomeMessage{}
-				err = json.Unmarshal(messageBytes, welcomeMessage)
-				if err != nil {
-					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling welcome message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
-					log.Println(errMsg)
-					if es.onError != nil {
-						go es.onError(es, fmt.Errorf(errMsg))
-					}
-					break loopiloop
-				}
-
-				es.sessionId = welcomeMessage.Payload.Session.Id
-				fmt.Printf("eventSub[%s] received session_welcome, session_id: %s\n", es.user.Username, es.sessionId)
-				if es.onStarted != nil {
-					go es.onStarted(es)
-				}
-				break
-			case "notification":
-				var notificationMessage = &twitch.NotificationMessage{}
-				err = json.Unmarshal(messageBytes, notificationMessage)
-				if err != nil {
-					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling notification message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
-					log.Println(errMsg)
-					if es.onError != nil {
-						go es.onError(es, fmt.Errorf(errMsg))
-					}
-					break loopiloop
-				}
-				fmt.Printf("eventSub[%s] received notification: %s\n", es.user.Username, notificationMessage.Metadata.MessageType)
-				go es.notificationHandler.Handle(messageBytes)
-				break
-			case "session_reconnect":
-				// The session_reconnect has the same structure as the session_welcome message
-				var reconnectMessage = &twitch.WelcomeMessage{}
-				err = json.Unmarshal(messageBytes, reconnectMessage)
-				if err != nil {
-					errMsg := fmt.Sprintf("eventSub[%s] error unmarshalling reconnect message: %v, raw data: %s", es.user.Username, err, string(messageBytes))
-					log.Println(errMsg)
-					if es.onError != nil {
-						go es.onError(es, fmt.Errorf(errMsg))
-					}
-					break loopiloop
-				}
-
-				reconnectUrl := reconnectMessage.Payload.Session.ReconnectUrl
-				if reconnectUrl != "" {
-					if _, parseErr := url.Parse(reconnectUrl); parseErr != nil {
-						errMsg := fmt.Sprintf("eventSub[%s] invalid reconnect URL: %s, error: %v", es.user.Username, reconnectUrl, parseErr)
-						log.Println(errMsg)
-						if es.onError != nil {
-							go es.onError(es, fmt.Errorf(errMsg))
-						}
-						break loopiloop
-					}
-				}
-
-				if es.onRefresh != nil {
-					go es.onRefresh(es, reconnectUrl)
-				}
-				fmt.Printf("eventSub[%s] received session_reconnect, reconnecting to %s\n", es.user.Username, reconnectUrl)
-				break
-			case "session_keepalive":
-				// This is a keepalive message, we can ignore it
-				fmt.Printf("eventSub[%s] received keepalive\n", es.user.Username)
-				break
-			default:
-				errMsg := fmt.Sprintf("eventSub[%s] received unknown message type: %s", es.user.Username, message.Metadata.MessageType)
-				log.Println(errMsg)
-				if es.onError != nil {
-					go es.onError(es, fmt.Errorf(errMsg))
-				}
-				break
-			}
+		select {
+		case <-ctx.Done():
+			return
+		case messageChan <- chanContent{
+			Message:      message,
+			MessageBytes: messageBytes,
+			error:        err,
+		}:
 		}
-		fmt.Printf("eventSub[%s] stopped\n", es.user.Username)
-	}()
+
+		if err != nil {
+			es.dispatchToEventListeners(EventListenerOnError, err)
+			return
+		}
+	}
+}
+
+// Main processLoop to handle messages received from the Twitch WebSocket connection.
+// Messages are read from the provided messageChan.
+// The loop runs until the provided context is cancelled.
+// Should not be called directly.
+func (es *EventSub) processLoop(ctx context.Context, messageChan chan chanContent) {
+	defer es.Stop()
+
+loopiloop:
+	for {
+		var content chanContent
+		var ok bool
+
+		select {
+		case <-ctx.Done():
+			es.dispatchToEventListeners(EventListenerOnStopped, nil)
+			break loopiloop
+		case content, ok = <-messageChan:
+			break
+		}
+
+		if !ok || content.error != nil {
+			var errMsg error
+			if content.error != nil {
+				errMsg = fmt.Errorf("error reading message: %v", content.error)
+			} else {
+				errMsg = fmt.Errorf("message channel closed unexpectedly")
+			}
+
+			es.dispatchToEventListeners(EventListenerOnError, errMsg)
+			break loopiloop
+		}
+
+		message := content.Message
+		messageBytes := content.MessageBytes
+
+		switch message.Metadata.MessageType {
+		case "session_welcome":
+			var welcomeMessage = &twitch.WelcomeMessage{}
+			err := json.Unmarshal(messageBytes, welcomeMessage)
+			if err != nil {
+				errMsg := fmt.Errorf("error unmarshalling welcome message: %v, raw data: %s", err, string(messageBytes))
+				es.dispatchToEventListeners(EventListenerOnError, errMsg)
+				break loopiloop
+			}
+
+			es.sessionId = welcomeMessage.Payload.Session.Id
+			es.dispatchToEventListeners(EventListenerOnStarted, nil)
+			break
+		case "notification":
+			var notificationMessage = &twitch.NotificationMessage{}
+			err := json.Unmarshal(messageBytes, notificationMessage)
+			if err != nil {
+				errMsg := fmt.Errorf("error unmarshalling notification message: %v, raw data: %s", err, string(messageBytes))
+				es.dispatchToEventListeners(EventListenerOnError, errMsg)
+				break loopiloop
+			}
+			go es.notificationHandler.Handle(messageBytes)
+			break
+		case "session_reconnect":
+			// The session_reconnect has the same structure as the session_welcome message
+			var reconnectMessage = &twitch.WelcomeMessage{}
+			err := json.Unmarshal(messageBytes, reconnectMessage)
+			if err != nil {
+				errMsg := fmt.Errorf("error unmarshalling reconnect message: %v, raw data: %s", err, string(messageBytes))
+				es.dispatchToEventListeners(EventListenerOnError, errMsg)
+				break loopiloop
+			}
+
+			reconnectUrl := reconnectMessage.Payload.Session.ReconnectUrl
+			if reconnectUrl != "" {
+				if _, parseErr := url.Parse(reconnectUrl); parseErr != nil {
+					errMsg := fmt.Errorf("invalid reconnect URL: %s, error: %v", reconnectUrl, parseErr)
+					es.dispatchToEventListeners(EventListenerOnError, errMsg)
+					break loopiloop
+				}
+			}
+
+			es.dispatchToEventListeners(EventListenerOnRefresh, reconnectUrl)
+
+			es.loopCtxCancel()
+			break
+		case "session_keepalive":
+			break
+		default:
+			errMsg := fmt.Errorf("received unknown message type: %s", message.Metadata.MessageType)
+			es.dispatchToEventListeners(EventListenerOnError, errMsg)
+			break
+		}
+	}
+	return
 }
