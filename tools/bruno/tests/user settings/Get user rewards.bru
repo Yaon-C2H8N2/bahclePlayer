@@ -1,0 +1,16 @@
+meta {
+  name: Get user rewards
+  type: http
+  seq: 2
+}
+
+get {
+  url: http://{{api_host}}/rewards
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

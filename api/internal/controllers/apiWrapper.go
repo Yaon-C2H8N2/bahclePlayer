@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
-	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
 )
 
 type ApiWrapper struct {
@@ -18,8 +19,11 @@ type ApiWrapper struct {
 	clientId string
 }
 
-func GetApiWrapper() *ApiWrapper {
-	return &ApiWrapper{}
+func GetApiWrapper(appToken string, clientId string) *ApiWrapper {
+	return &ApiWrapper{
+		appToken: appToken,
+		clientId: clientId,
+	}
 }
 
 func RequestAppToken(clientId string, clientSecret string) (string, error) {
@@ -213,18 +217,6 @@ func (aw *ApiWrapper) GetUserInfoFromToken(userToken string) (twitch.UserInfo, e
 	}
 
 	return userInfoResponse.Data[0], nil
-}
-
-func (aw *ApiWrapper) SetAppToken(token string) {
-	aw.appToken = token
-}
-
-func (aw *ApiWrapper) GetAppToken() string {
-	return aw.appToken
-}
-
-func (aw *ApiWrapper) SetClientId(clientId string) {
-	aw.clientId = clientId
 }
 
 func (aw *ApiWrapper) CreatePoll(userToken string, broadcasterId string, title string, choices []string, duration int) (string, error) {

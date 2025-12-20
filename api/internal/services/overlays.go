@@ -4,16 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
-	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
-	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	appContext "github.com/Yaon-C2H8N2/bahclePlayer/internal/context"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/models/twitch"
+	"github.com/Yaon-C2H8N2/bahclePlayer/internal/router"
+	"github.com/Yaon-C2H8N2/bahclePlayer/pkg/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
+
+type OverlaysService struct {
+	GetOverlays             router.HandlerFunction `method:"GET" path:"/overlays"`
+	GetEventSocket          router.HandlerFunction `method:"GET" path:"/overlays/events"`
+	GetUserOverlaySettings  router.HandlerFunction `method:"GET" path:"/overlays/settings"`
+	SaveUserOverlaySettings router.HandlerFunction `method:"POST" path:"/overlays/settings"`
+}
+
+func GetOverlaysService() *OverlaysService {
+	return &OverlaysService{
+		GetOverlays:             getOverlays,
+		GetEventSocket:          getEventSocket,
+		GetUserOverlaySettings:  getUserOverlaySettings,
+		SaveUserOverlaySettings: saveUserOverlaySettings,
+	}
+}
 
 var eventTypesHandler = map[string]func(*websocket.Conn, any){
 	"currently_playing": handleEvent,
@@ -21,7 +40,7 @@ var eventTypesHandler = map[string]func(*websocket.Conn, any){
 	"deleted_video":     handleEvent,
 }
 
-func getOverlays(c *gin.Context) {
+func getOverlays(c *gin.Context, appContext *appContext.AppContext) {
 	TwitchUserContext, _ := c.Get("TwitchUser")
 	userInfo, _ := TwitchUserContext.(twitch.UserInfo)
 
@@ -59,7 +78,7 @@ func handleEvent(conn *websocket.Conn, data any) {
 	}
 }
 
-func getEventSocket(c *gin.Context) {
+func getEventSocket(c *gin.Context, appContext *appContext.AppContext) {
 	twitchID := c.Query("twitch_id")
 	eventType := c.Query("event_type")
 	if twitchID == "" || eventType == "" {
@@ -156,7 +175,7 @@ func getUserOverlays(c *gin.Context) {
 	})
 }
 
-func getUserOverlaySettings(c *gin.Context) {
+func getUserOverlaySettings(c *gin.Context, appContext *appContext.AppContext) {
 	twitchId := c.Query("twitch_id")
 	overlayCode := c.Query("overlay_code")
 
@@ -180,7 +199,7 @@ func getUserOverlaySettings(c *gin.Context) {
 	})
 }
 
-func saveUserOverlaySettings(c *gin.Context) {
+func saveUserOverlaySettings(c *gin.Context, appContext *appContext.AppContext) {
 	userContext, _ := c.Get("User")
 	user, _ := userContext.(models.Users)
 
