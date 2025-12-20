@@ -1,18 +1,28 @@
 ARG NODE_VERSION=23.1.0
 ARG ALPINE_VERSION=3.20
-ARG NGINX_VERISON=1.26.2
+ARG NGINX_VERSION=1.26.2
 
-FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS builder
+FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS base
 
 WORKDIR /app
 
 COPY client/package.json client/package-lock.json ./
-RUN npm install
+RUN npm ci
 
 COPY client/ .
+
+FROM base AS development
+
+COPY docker/client/entrypoint.dev.sh /entrypoint.dev.sh
+COPY ../.env /.env
+
+ENTRYPOINT ["/bin/sh", "/entrypoint.dev.sh"]
+
+FROM base AS builder
+
 RUN npm run build
 
-FROM nginx:${NGINX_VERISON}-alpine${ALPINE_VERSION}-slim
+FROM nginx:${NGINX_VERSION}-alpine${ALPINE_VERSION}-slim
 
 ARG API_PORT=8081
 ARG WEB_PORT=80
